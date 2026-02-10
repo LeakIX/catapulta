@@ -180,11 +180,11 @@ impl Pipeline {
         provisioner.destroy_server(name)?;
 
         // Remove DNS record
-        if let Some(dns) = &self.dns
-            && domain.is_some()
-        {
-            eprintln!("Removing DNS record...");
-            dns.delete_a_record()?;
+        if let Some(dns) = &self.dns {
+            if domain.is_some() {
+                eprintln!("Removing DNS record...");
+                dns.delete_a_record()?;
+            }
         }
 
         eprintln!();

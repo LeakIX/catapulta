@@ -23,13 +23,13 @@ impl DockerSaveLoad {
     }
 
     fn check_env_file(app: &App) -> DeployResult<()> {
-        if let Some(env_file) = &app.env_file
-            && !Path::new(env_file).exists()
-        {
-            return Err(DeployError::FileNotFound(format!(
-                "{env_file} not found. \
-                 Create from .env.example"
-            )));
+        if let Some(env_file) = &app.env_file {
+            if !Path::new(env_file).exists() {
+                return Err(DeployError::FileNotFound(format!(
+                    "{env_file} not found. \
+                     Create from .env.example"
+                )));
+            }
         }
         Ok(())
     }

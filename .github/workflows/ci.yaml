@@ -71,6 +71,15 @@ jobs:
       - name: Check TOML formatting
         run: make check-format-toml
 
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+      - name: Run shellcheck
+        run: make lint-shell
+
   documentation:
     runs-on: ubuntu-latest
     steps:

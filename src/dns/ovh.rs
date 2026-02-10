@@ -236,11 +236,12 @@ fn parse_ini_value(content: &str, section: &str, key: &str) -> Option<String> {
             }
             continue;
         }
-        if in_section
-            && let Some((k, v)) = trimmed.split_once('=')
-            && k.trim() == key
-        {
-            return Some(v.trim().to_string());
+        if in_section {
+            if let Some((k, v)) = trimmed.split_once('=') {
+                if k.trim() == key {
+                    return Some(v.trim().to_string());
+                }
+            }
         }
     }
     None

@@ -1,10 +1,8 @@
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-    SED := $(shell command -v gsed 2>/dev/null)
-    ifeq ($(SED),)
+    SED = $(or $(shell command -v gsed 2>/dev/null),\
         $(error GNU sed (gsed) not found on macOS. \
-			Install with: brew install gnu-sed)
-    endif
+        Install with: brew install gnu-sed))
 else
     SED := sed
 endif
@@ -120,4 +118,4 @@ check-trailing-whitespace: ## Check for trailing whitespaces
 
 .PHONY: lint-shell
 lint-shell: ## Lint shell scripts using shellcheck
-	shellcheck .github/scripts/*.sh
+	shellcheck scripts/*.sh
