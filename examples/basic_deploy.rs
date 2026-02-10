@@ -1,6 +1,6 @@
 //! Basic deployment pipeline example.
 //!
-//! Demonstrates provisioning a DigitalOcean droplet, setting up
+//! Demonstrates provisioning a `DigitalOcean` droplet, setting up
 //! OVH DNS, and deploying a Docker container with Caddy reverse
 //! proxy.
 //!

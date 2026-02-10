@@ -109,5 +109,8 @@ pub use caddy::Caddy;
 pub use deploy::docker_save::DockerSaveLoad;
 pub use dns::cloudflare::Cloudflare;
 pub use dns::ovh::Ovh;
+pub use dns::ovh::OvhCredentials;
+pub use dns::ovh::parse_ini_value;
 pub use pipeline::Pipeline;
 pub use provision::digitalocean::DigitalOcean;
+pub use provision::digitalocean::remove_ssh_host_entry;
