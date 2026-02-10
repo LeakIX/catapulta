@@ -1,0 +1,33 @@
+[package]
+name = "catapulta"
+version = "0.1.0"
+edition = "2024"
+authors = ["LeakIX <contact@leakix.net>"]
+license = "MIT"
+description = "Declarative deployment DSL for Rust — provision, configure, and launch containers to any VPS"
+repository = "https://github.com/LeakIX/catapulta"
+documentation = "https://leakix.github.io/catapulta/catapulta/"
+rust-version = "1.85"
+keywords = ["deployment", "docker", "vps", "devops", "ssh"]
+categories = [
+    "command-line-utilities",
+    "development-tools",
+    "config",
+]
+exclude = [".github/", "taplo.toml", "tests/"]
+
+[lints.clippy]
+all = "deny"
+pedantic = "deny"
+nursery = "deny"
+
+[dependencies]
+caddyfile-rs = "0.1"
+clap = { version = "4.5", features = ["derive"] }
+docker-compose-types = { version = "0.22", features = ["indexmap"] }
+indexmap = "2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+thiserror = "2.0"
+anyhow = "1.0"

@@ -1,0 +1,135 @@
+use std::path::Path;
+
+use crate::app::App;
+use crate::caddy::Caddy;
+use crate::caddyfile;
+use crate::cmd;
+use crate::compose;
+use crate::deploy::Deployer;
+use crate::error::{DeployError, DeployResult};
+use crate::ssh::SshSession;
+
+/// Deploy via `docker save | gzip | ssh | docker load`.
+///
+/// This is the simplest deployment strategy — no registry
+/// needed. The image is built locally for linux/amd64,
+/// streamed over SSH, then started with docker compose.
+pub struct DockerSaveLoad;
+
+impl DockerSaveLoad {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
+    }
+
+    fn check_env_file(app: &App) -> DeployResult<()> {
+        if let Some(env_file) = &app.env_file
+            && !Path::new(env_file).exists()
+        {
+            return Err(DeployError::FileNotFound(format!(
+                "{env_file} not found. \
+                 Create from .env.example"
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl Default for DockerSaveLoad {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Deployer for DockerSaveLoad {
+    fn build_image(&self, app: &App) -> DeployResult<()> {
+        eprintln!("Building Docker image for {}...", app.platform);
+
+        let mut args = vec!["build", "--platform", &app.platform, "-f", &app.dockerfile];
+
+        let build_arg_strings: Vec<String> = app
+            .build_args
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect();
+
+        for arg_str in &build_arg_strings {
+            args.push("--build-arg");
+            args.push(arg_str);
+        }
+
+        let tag = format!("{}:latest", app.name);
+        args.push("-t");
+        args.push(&tag);
+        args.push(".");
+
+        cmd::run_interactive("docker", &args)
+    }
+
+    fn transfer_image(&self, app: &App, host: &str, user: &str) -> DeployResult<()> {
+        eprintln!("Transferring image to {host}...");
+
+        let pipeline = format!(
+            "docker save {}:latest | gzip | \
+             ssh {user}@{host} 'gunzip | docker load'",
+            app.name
+        );
+        cmd::run_pipeline(&pipeline)
+    }
+
+    fn deploy(
+        &self,
+        host: &str,
+        user: &str,
+        app: &App,
+        caddy: &Caddy,
+        remote_dir: &str,
+    ) -> DeployResult<()> {
+        Self::check_env_file(app)?;
+
+        eprintln!("Deploying to {user}@{host}...");
+
+        let ssh = SshSession::new(host, user);
+
+        // Generate Caddyfile
+        let caddyfile_content = caddyfile::render(caddy, host);
+
+        // Generate docker-compose.yml
+        let compose_content = compose::render(app, caddy);
+
+        // Write generated files to remote
+        eprintln!("Writing deployment config...");
+        ssh.write_remote_file(
+            &compose_content,
+            &format!("{remote_dir}/docker-compose.yml"),
+        )?;
+        ssh.write_remote_file(&caddyfile_content, &format!("{remote_dir}/Caddyfile"))?;
+
+        // Transfer .env file if specified
+        if let Some(env_file) = &app.env_file {
+            ssh.scp_to(env_file, &format!("{remote_dir}/.env"))?;
+            ssh.exec(&format!("chmod 600 {remote_dir}/.env"))?;
+        }
+
+        // Restart containers
+        eprintln!("Starting containers...");
+        ssh.exec_interactive(&format!(
+            "cd {remote_dir} && \
+             docker compose down 2>/dev/null || true && \
+             docker compose up -d"
+        ))?;
+
+        // Wait for health
+        eprintln!("Waiting for service to be healthy...");
+        std::thread::sleep(std::time::Duration::from_secs(10));
+
+        // Show status
+        ssh.exec_interactive(&format!("cd {remote_dir} && docker compose ps"))?;
+
+        eprintln!();
+        eprintln!("Deployment complete!");
+        eprintln!("Application available at: https://{host}");
+
+        Ok(())
+    }
+}
