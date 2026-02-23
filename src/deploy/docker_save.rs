@@ -67,14 +67,34 @@ impl Deployer for DockerSaveLoad {
     }
 
     fn transfer_image(&self, app: &App, host: &str, user: &str) -> DeployResult<()> {
-        eprintln!("Transferring image to {host}...");
+        let tag = format!("{}:latest", app.name);
 
+        // Query image size for logging and progress
+        let size_bytes = cmd::run(
+            "docker",
+            &["image", "inspect", "--format", "{{.Size}}", &tag],
+        )?;
+        let size_bytes: u64 = size_bytes.parse().unwrap_or(0);
+        let size_mb = size_bytes / (1024 * 1024);
+
+        eprintln!("Transferring image {tag} ({size_mb} MB) to {user}@{host}");
+
+        // Use pv for a progress bar when available, plain pipe otherwise
+        let progress = if cmd::command_exists("pv") {
+            format!("pv -s {size_bytes} -p -t -e -r -b")
+        } else {
+            "cat".to_string()
+        };
+
+        eprintln!("  Saving image, compressing, and streaming over SSH...");
         let pipeline = format!(
-            "docker save {}:latest | gzip | \
-             ssh {user}@{host} 'gunzip | docker load'",
-            app.name
+            "docker save {tag} | {progress} | gzip | \
+             ssh {user}@{host} 'gunzip | docker load'"
         );
-        cmd::run_pipeline(&pipeline)
+        cmd::run_pipeline(&pipeline)?;
+
+        eprintln!("  Image loaded on {host}");
+        Ok(())
     }
 
     fn deploy(
