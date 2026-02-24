@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
   `Upstream` instead of `impl Into<String>`, callers must use
   `App::upstream()` ([ca10728])
 - Remove `From<Upstream> for String` impl ([ca10728])
+- `Pipeline` now supports multiple DNS providers; calling `.dns()` pushes
+  to a vec instead of replacing the previous provider ([1ea20e5], [#7])
 
 ## [0.3.0] - 2026-02-24
 
@@ -94,6 +96,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[1ea20e5]: https://github.com/LeakIX/catapulta/commit/1ea20e5
 [ca10728]: https://github.com/LeakIX/catapulta/commit/ca10728
 [5d27688]: https://github.com/LeakIX/catapulta/commit/5d27688
 [973cf31]: https://github.com/LeakIX/catapulta/commit/973cf31
@@ -109,6 +112,7 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#7]: https://github.com/LeakIX/catapulta/issues/7
 [#6]: https://github.com/LeakIX/catapulta/issues/6
 [#5]: https://github.com/LeakIX/catapulta/issues/5
 [#4]: https://github.com/LeakIX/catapulta/issues/4
