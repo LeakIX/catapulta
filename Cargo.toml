@@ -10,7 +10,7 @@ documentation = "https://leakix.github.io/catapulta/catapulta/"
 rust-version = "1.85"
 keywords = ["deployment", "docker", "vps", "devops", "ssh"]
 categories = ["command-line-utilities", "development-tools", "config"]
-exclude = [".github/", "taplo.toml", "tests/"]
+exclude = [".github/", "taplo.toml"]
 
 [lints.clippy]
 all = "deny"
