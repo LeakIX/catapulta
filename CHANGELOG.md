@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING**: `Caddy::reverse_proxy()` and `Caddy::route()` now require
+  `Upstream` instead of `impl Into<String>`, callers must use
+  `App::upstream()` ([ca10728])
+- Remove `From<Upstream> for String` impl ([ca10728])
+
 ## [0.3.0] - 2026-02-24
 
 ### Added
@@ -87,6 +94,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[ca10728]: https://github.com/LeakIX/catapulta/commit/ca10728
 [5d27688]: https://github.com/LeakIX/catapulta/commit/5d27688
 [973cf31]: https://github.com/LeakIX/catapulta/commit/973cf31
 [f90cfa7]: https://github.com/LeakIX/catapulta/commit/f90cfa7
