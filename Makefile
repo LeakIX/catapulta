@@ -72,6 +72,9 @@ setup: ## Setup development environment
 	rustup component add --toolchain nightly rustfmt
 	cargo install taplo-cli
 
+VERSION := $(shell grep '^version' Cargo.toml | \
+	head -1 | sed 's/.*"\(.*\)"/\1/')
+
 .PHONY: publish-dry
 publish-dry: ## Dry-run publish to crates.io
 	cargo publish --dry-run
@@ -79,6 +82,21 @@ publish-dry: ## Dry-run publish to crates.io
 .PHONY: publish
 publish: ## Publish to crates.io
 	cargo publish
+
+.PHONY: release
+release: ## Tag and publish a release (runs checks first)
+	@echo "Releasing v$(VERSION)..."
+	cargo +nightly fmt --check
+	cargo clippy -- -D warnings
+	cargo test
+	cargo publish --dry-run
+	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
+	git push origin "v$(VERSION)"
+	cargo publish
+	gh release create "v$(VERSION)" \
+		--title "v$(VERSION)" \
+		--notes-from-tag
+	@echo "Released v$(VERSION)"
 
 .PHONY: fix-trailing-whitespace
 fix-trailing-whitespace: ## Remove trailing whitespaces
