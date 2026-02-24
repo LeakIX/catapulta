@@ -22,7 +22,7 @@ pub fn render(apps: &[App], caddy: &Caddy) -> String {
     if caddy.has_upstreams() {
         services.insert(
             "caddy".to_string(),
-            Some(caddy_service(apps, &network_name)),
+            Some(caddy_service(apps, caddy, &network_name)),
         );
     }
 
@@ -40,10 +40,19 @@ pub fn render(apps: &[App], caddy: &Caddy) -> String {
     serde_yaml::to_string(&compose).expect("failed to serialize compose")
 }
 
-fn caddy_service(apps: &[App], network_name: &str) -> Service {
+fn caddy_service(apps: &[App], caddy: &Caddy, network_name: &str) -> Service {
     let mut depends = IndexMap::new();
     for app in apps {
         depends.insert(app.name.clone(), DependsCondition::service_healthy());
+    }
+
+    let mut volumes = vec![
+        Volumes::Simple("./Caddyfile:/etc/caddy/Caddyfile:ro".to_string()),
+        Volumes::Simple("caddy-data:/data".to_string()),
+        Volumes::Simple("caddy-config:/config".to_string()),
+    ];
+    for (host, container) in &caddy.volumes {
+        volumes.push(Volumes::Simple(format!("{host}:{container}")));
     }
 
     Service {
@@ -51,11 +60,7 @@ fn caddy_service(apps: &[App], network_name: &str) -> Service {
         container_name: Some(format!("{}-caddy", apps[0].name)),
         restart: Some("unless-stopped".to_string()),
         ports: Ports::Short(vec!["80:80".to_string(), "443:443".to_string()]),
-        volumes: vec![
-            Volumes::Simple("./Caddyfile:/etc/caddy/Caddyfile:ro".to_string()),
-            Volumes::Simple("caddy-data:/data".to_string()),
-            Volumes::Simple("caddy-config:/config".to_string()),
-        ],
+        volumes,
         depends_on: DependsOnOptions::Conditional(depends),
         networks: Networks::Simple(vec![network_name.to_string()]),
         ..Default::default()
@@ -136,6 +141,12 @@ fn top_level_volumes(apps: &[App], caddy: &Caddy) -> TopLevelVolumes {
         let local = MapOrEmpty::Map(local_volume());
         vols.insert("caddy-data".to_string(), local.clone());
         vols.insert("caddy-config".to_string(), local);
+    }
+
+    for (host, _) in &caddy.volumes {
+        if !host.starts_with("./") && !host.starts_with('/') {
+            vols.insert(host.clone(), MapOrEmpty::Map(local_volume()));
+        }
     }
 
     TopLevelVolumes(vols)

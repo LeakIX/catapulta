@@ -250,3 +250,53 @@ fn multi_app_volumes_from_all_apps() {
     assert!(parsed.volumes.0.contains_key("caddy-data"));
     assert!(parsed.volumes.0.contains_key("caddy-config"));
 }
+
+#[test]
+fn caddy_custom_volumes_in_service() {
+    let app = App::new("spa").expose(3000);
+    let caddy = Caddy::new()
+        .reverse_proxy("spa:3000")
+        .volume("./web-static", "/www:ro")
+        .volume("caddy-certs", "/certs");
+
+    let result = compose::render(&[app], &caddy);
+
+    // Custom volumes appear in the caddy service
+    assert!(result.contains("./web-static:/www:ro"));
+    assert!(result.contains("caddy-certs:/certs"));
+    // Hardcoded volumes still present
+    assert!(result.contains("caddy-data:/data"));
+    assert!(result.contains("caddy-config:/config"));
+}
+
+#[test]
+fn caddy_named_volume_registered_at_top_level() {
+    let app = App::new("spa").expose(3000);
+    let caddy = Caddy::new()
+        .reverse_proxy("spa:3000")
+        .volume("caddy-certs", "/certs");
+
+    let yaml = compose::render(&[app], &caddy);
+    let parsed: Compose = serde_yaml::from_str(&yaml).expect("parse");
+
+    assert!(parsed.volumes.0.contains_key("caddy-certs"));
+}
+
+#[test]
+fn caddy_bind_mount_not_in_top_level_volumes() {
+    let app = App::new("spa").expose(3000);
+    let caddy = Caddy::new()
+        .reverse_proxy("spa:3000")
+        .volume("./web-static", "/www:ro")
+        .volume("/host/path", "/container:ro");
+
+    let yaml = compose::render(&[app], &caddy);
+    let parsed: Compose = serde_yaml::from_str(&yaml).expect("parse");
+
+    // Bind mounts should NOT be in top-level volumes
+    assert!(!parsed.volumes.0.contains_key("./web-static"));
+    assert!(!parsed.volumes.0.contains_key("/host/path"));
+    // But the service-level mount should still exist
+    assert!(yaml.contains("./web-static:/www:ro"));
+    assert!(yaml.contains("/host/path:/container:ro"));
+}

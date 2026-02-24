@@ -75,3 +75,14 @@ fn route_accepts_upstream() {
         ]
     );
 }
+
+#[test]
+fn volume_builder() {
+    let caddy = Caddy::new()
+        .volume("./web-static", "/www:ro")
+        .volume("caddy-certs", "/certs");
+
+    assert_eq!(caddy.volumes.len(), 2);
+    assert_eq!(caddy.volumes[0], ("./web-static".into(), "/www:ro".into()));
+    assert_eq!(caddy.volumes[1], ("caddy-certs".into(), "/certs".into()));
+}

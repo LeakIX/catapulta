@@ -9,11 +9,13 @@
 ///
 /// let caddy = Caddy::new()
 ///     .reverse_proxy(app.upstream())
+///     .volume("./web-static", "/www:ro")
 ///     .gzip()
 ///     .security_headers();
 ///
 /// assert!(caddy.gzip);
 /// assert!(caddy.security_headers);
+/// assert_eq!(caddy.volumes.len(), 1);
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct Caddy {
@@ -27,6 +29,9 @@ pub struct Caddy {
     pub gzip: bool,
     pub security_headers: bool,
     pub extra_directives: Vec<String>,
+    /// Custom volumes to mount into the Caddy container.
+    /// Each entry is `(host_path_or_name, container_path)`.
+    pub volumes: Vec<(String, String)>,
 }
 
 impl Caddy {
@@ -79,6 +84,16 @@ impl Caddy {
     #[must_use]
     pub fn directive(mut self, raw: &str) -> Self {
         self.extra_directives.push(raw.to_string());
+        self
+    }
+
+    /// Mount a volume into the Caddy container.
+    ///
+    /// Paths starting with `./` or `/` are treated as bind mounts
+    /// and will not be registered as top-level named volumes.
+    #[must_use]
+    pub fn volume(mut self, host: &str, container: &str) -> Self {
+        self.volumes.push((host.to_string(), container.to_string()));
         self
     }
 }
