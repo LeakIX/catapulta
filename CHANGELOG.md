@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
   ([f90cfa7])
 - `App::upstream()` and `App::upstream_port()` to derive upstream
   from exposed ports ([f90cfa7])
+- `Caddy::volume()` builder for mounting custom volumes into the Caddy
+  container ([5d27688], [#6])
 
 ### Changed
 
@@ -25,6 +27,11 @@ All notable changes to this project will be documented in this file.
   `impl Into<String>` instead of `&str` ([f90cfa7])
 - `cmd_provision` now calls generic `detect_ssh_key()` instead of
   DO-specific function ([abdd0ce], [#5])
+
+### Infrastructure
+
+- Include tests in published crate to fix `cargo package` warnings
+  ([973cf31])
 
 ## [0.2.0] - 2026-02-24
 
@@ -78,6 +85,8 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[5d27688]: https://github.com/LeakIX/catapulta/commit/5d27688
+[973cf31]: https://github.com/LeakIX/catapulta/commit/973cf31
 [f90cfa7]: https://github.com/LeakIX/catapulta/commit/f90cfa7
 [abdd0ce]: https://github.com/LeakIX/catapulta/commit/abdd0ce
 [07e32cf]: https://github.com/LeakIX/catapulta/commit/07e32cf
@@ -90,6 +99,7 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#6]: https://github.com/LeakIX/catapulta/issues/6
 [#5]: https://github.com/LeakIX/catapulta/issues/5
 [#4]: https://github.com/LeakIX/catapulta/issues/4
 
