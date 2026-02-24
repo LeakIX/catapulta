@@ -1,7 +1,5 @@
 pub mod digitalocean;
 
-use crate::app::App;
-use crate::caddy::Caddy;
 use crate::error::DeployResult;
 
 /// Information about a provisioned server.
@@ -26,13 +24,7 @@ pub trait Provisioner {
 
     /// Install Docker, configure firewall, start Caddy
     /// placeholder.
-    fn setup_server(
-        &self,
-        server: &ServerInfo,
-        app: &App,
-        caddy: &Caddy,
-        domain: Option<&str>,
-    ) -> DeployResult<()>;
+    fn setup_server(&self, server: &ServerInfo, domain: Option<&str>) -> DeployResult<()>;
 
     /// Get an existing server by name.
     fn get_server(&self, name: &str) -> DeployResult<Option<ServerInfo>>;

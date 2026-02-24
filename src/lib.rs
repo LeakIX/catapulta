@@ -54,6 +54,43 @@
 //! }
 //! ```
 //!
+//! # Multi-app deployment
+//!
+//! Deploy multiple services behind a single Caddy reverse proxy
+//! with path-based routing:
+//!
+//! ```rust,no_run
+//! use catapulta::{
+//!     App, Caddy, DigitalOcean, DockerSaveLoad, Ovh, Pipeline,
+//! };
+//!
+//! fn main() -> anyhow::Result<()> {
+//!     let api = App::new("api")
+//!         .dockerfile("api/Dockerfile")
+//!         .healthcheck("curl -f http://localhost:8000/health")
+//!         .expose(8000);
+//!
+//!     let web = App::new("web")
+//!         .dockerfile("web/Dockerfile")
+//!         .healthcheck("curl -f http://localhost:3000/")
+//!         .expose(3000);
+//!
+//!     let caddy = Caddy::new()
+//!         .route("/api/*", "api:8000")
+//!         .route("", "web:3000")
+//!         .gzip()
+//!         .security_headers();
+//!
+//!     let pipeline = Pipeline::multi(vec![api, web], caddy)
+//!         .provision(DigitalOcean::new())
+//!         .dns(Ovh::new("my-project.example.com"))
+//!         .deploy(DockerSaveLoad::new());
+//!
+//!     pipeline.run()?;
+//!     Ok(())
+//! }
+//! ```
+//!
 //! Then use `cargo xtask` subcommands:
 //!
 //! ```sh

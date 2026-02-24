@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use crate::app::App;
-use crate::caddy::Caddy;
 use crate::cmd;
 use crate::error::{DeployError, DeployResult};
 use crate::provision::{Provisioner, ServerInfo};
@@ -268,13 +266,7 @@ impl Provisioner for DigitalOcean {
         })
     }
 
-    fn setup_server(
-        &self,
-        server: &ServerInfo,
-        _app: &App,
-        _caddy: &Caddy,
-        domain: Option<&str>,
-    ) -> DeployResult<()> {
+    fn setup_server(&self, server: &ServerInfo, domain: Option<&str>) -> DeployResult<()> {
         let ssh = SshSession::new(&server.ip, "root").with_key(&server.ssh_key_file);
 
         ssh.wait_for_ready(30, std::time::Duration::from_secs(10))?;

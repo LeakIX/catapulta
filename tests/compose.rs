@@ -16,7 +16,7 @@ fn generates_valid_compose() {
         .gzip()
         .security_headers();
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(result.contains("services:"));
     assert!(result.contains("caddy:"));
@@ -31,7 +31,7 @@ fn no_caddy_service_without_reverse_proxy() {
     let app = App::new("standalone").expose(8080);
     let caddy = Caddy::new();
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(result.contains("services:"));
     assert!(!result.contains("  caddy:"));
@@ -45,7 +45,7 @@ fn env_file_in_compose() {
     let app = App::new("myapp").env_file(".env").env("EXTRA", "val");
     let caddy = Caddy::new();
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(result.contains("env_file:"));
     assert!(result.contains(".env"));
@@ -58,7 +58,7 @@ fn env_file_uses_filename_only() {
     let app = App::new("myapp").env_file("deploy/vps/.env");
     let caddy = Caddy::new();
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(result.contains(".env"));
     assert!(!result.contains("deploy/vps/.env"));
@@ -69,7 +69,7 @@ fn multiple_ports() {
     let app = App::new("multi").expose(3000).expose(8080).expose(9090);
     let caddy = Caddy::new();
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(result.contains("expose:"));
     assert!(result.contains("3000"));
@@ -82,7 +82,7 @@ fn no_caddy_volumes_when_no_caddy() {
     let app = App::new("novol");
     let caddy = Caddy::new();
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(!result.contains("caddy-data"));
     assert!(!result.contains("caddy-config"));
@@ -93,7 +93,7 @@ fn healthcheck_in_compose() {
     let app = App::new("hc").healthcheck("curl -f http://localhost:3000/");
     let caddy = Caddy::new();
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(result.contains("healthcheck:"));
     assert!(result.contains("interval: 30s"));
@@ -107,7 +107,7 @@ fn no_healthcheck_when_unset() {
     let app = App::new("nohc");
     let caddy = Caddy::new();
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(!result.contains("healthcheck:"));
 }
@@ -120,7 +120,7 @@ fn multiple_volumes() {
         .volume("logs", "/app/logs");
     let caddy = Caddy::new();
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(result.contains("data:/app/data"));
     assert!(result.contains("config:/app/config"));
@@ -135,7 +135,7 @@ fn caddy_depends_on_app() {
     let app = App::new("webapp").expose(3000);
     let caddy = Caddy::new().reverse_proxy("webapp:3000");
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(result.contains("depends_on:"));
     assert!(result.contains("webapp:"));
@@ -147,7 +147,7 @@ fn network_name_matches_app() {
     let app = App::new("my-service");
     let caddy = Caddy::new();
 
-    let result = compose::render(&app, &caddy);
+    let result = compose::render(&[app], &caddy);
 
     assert!(result.contains("my-service-network:"));
     assert!(result.contains("driver: bridge"));
@@ -167,7 +167,7 @@ fn round_trip_parse() {
         .gzip()
         .security_headers();
 
-    let yaml = compose::render(&app, &caddy);
+    let yaml = compose::render(&[app], &caddy);
     let parsed: Compose = serde_yaml::from_str(&yaml).expect("round-trip parse");
 
     assert!(parsed.services.0.contains_key("caddy"));
@@ -175,4 +175,78 @@ fn round_trip_parse() {
     assert!(parsed.volumes.0.contains_key("data"));
     assert!(parsed.volumes.0.contains_key("caddy-data"));
     assert!(parsed.networks.0.contains_key("roundtrip-network"));
+}
+
+// --- Multi-app tests ---
+
+#[test]
+fn multi_app_compose() {
+    let api = App::new("api")
+        .healthcheck("curl -f http://localhost:8000/health")
+        .expose(8000);
+    let web = App::new("web")
+        .healthcheck("curl -f http://localhost:3000/")
+        .expose(3000);
+
+    let caddy = Caddy::new()
+        .route("/api/*", "api:8000")
+        .route("", "web:3000");
+
+    let result = compose::render(&[api, web], &caddy);
+
+    // Both services present
+    assert!(result.contains("image: api:latest"));
+    assert!(result.contains("image: web:latest"));
+
+    // Caddy present (routes count as upstreams)
+    assert!(result.contains("caddy:"));
+    assert!(result.contains("caddy-data:"));
+
+    // Shared network named after first app
+    assert!(result.contains("api-network:"));
+
+    // Caddy depends on both apps
+    assert!(result.contains("api:"));
+    assert!(result.contains("web:"));
+    assert!(result.contains("condition: service_healthy"));
+}
+
+#[test]
+fn multi_app_shared_network() {
+    let api = App::new("api").expose(8000);
+    let web = App::new("web").expose(3000);
+
+    let caddy = Caddy::new()
+        .route("/api/*", "api:8000")
+        .route("", "web:3000");
+
+    let yaml = compose::render(&[api, web], &caddy);
+    let parsed: Compose = serde_yaml::from_str(&yaml).expect("parse");
+
+    // Single shared network
+    assert_eq!(parsed.networks.0.len(), 1);
+    assert!(parsed.networks.0.contains_key("api-network"));
+
+    // All three services exist
+    assert!(parsed.services.0.contains_key("caddy"));
+    assert!(parsed.services.0.contains_key("api"));
+    assert!(parsed.services.0.contains_key("web"));
+}
+
+#[test]
+fn multi_app_volumes_from_all_apps() {
+    let api = App::new("api").volume("api-data", "/data");
+    let web = App::new("web").volume("web-assets", "/assets");
+
+    let caddy = Caddy::new()
+        .route("/api/*", "api:8000")
+        .route("", "web:3000");
+
+    let yaml = compose::render(&[api, web], &caddy);
+    let parsed: Compose = serde_yaml::from_str(&yaml).expect("parse");
+
+    assert!(parsed.volumes.0.contains_key("api-data"));
+    assert!(parsed.volumes.0.contains_key("web-assets"));
+    assert!(parsed.volumes.0.contains_key("caddy-data"));
+    assert!(parsed.volumes.0.contains_key("caddy-config"));
 }

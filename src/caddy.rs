@@ -17,6 +17,11 @@
 pub struct Caddy {
     pub basic_auth: Option<(String, String)>,
     pub reverse_proxy: Option<String>,
+    /// Path-based routes for multi-service setups.
+    /// Each entry is `(path_pattern, upstream)`.
+    /// When non-empty, these are rendered as Caddy `handle`
+    /// blocks instead of a single `reverse_proxy`.
+    pub routes: Vec<(String, String)>,
     pub gzip: bool,
     pub security_headers: bool,
     pub extra_directives: Vec<String>,
@@ -50,6 +55,23 @@ impl Caddy {
     pub const fn security_headers(mut self) -> Self {
         self.security_headers = true;
         self
+    }
+
+    /// Add a path-based route rendered as a Caddy `handle` block.
+    ///
+    /// Use `/*` suffix for prefix matching. The last route
+    /// without a path matcher becomes the catch-all `handle`.
+    #[must_use]
+    pub fn route(mut self, path: &str, upstream: &str) -> Self {
+        self.routes.push((path.to_string(), upstream.to_string()));
+        self
+    }
+
+    /// Returns true when Caddy should be included in the
+    /// compose stack (has a `reverse_proxy` or routes).
+    #[must_use]
+    pub fn has_upstreams(&self) -> bool {
+        self.reverse_proxy.is_some() || !self.routes.is_empty()
     }
 
     #[must_use]

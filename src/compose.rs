@@ -10,35 +10,45 @@ use indexmap::IndexMap;
 use crate::app::App;
 use crate::caddy::Caddy;
 
-/// Render a complete `docker-compose.yml` from App and Caddy
-/// configuration.
+/// Render a complete `docker-compose.yml` from one or more Apps
+/// and Caddy configuration.
 #[must_use]
-pub fn render(app: &App, caddy: &Caddy) -> String {
+pub fn render(apps: &[App], caddy: &Caddy) -> String {
+    assert!(!apps.is_empty(), "at least one app is required");
+
+    let network_name = format!("{}-network", apps[0].name);
     let mut services = IndexMap::new();
 
-    if caddy.reverse_proxy.is_some() {
-        services.insert("caddy".to_string(), Some(caddy_service(app)));
+    if caddy.has_upstreams() {
+        services.insert(
+            "caddy".to_string(),
+            Some(caddy_service(apps, &network_name)),
+        );
     }
 
-    services.insert(app.name.clone(), Some(app_service(app)));
+    for app in apps {
+        services.insert(app.name.clone(), Some(app_service(app, &network_name)));
+    }
 
     let compose = Compose {
         services: Services(services),
-        volumes: top_level_volumes(app, caddy),
-        networks: network(app),
+        volumes: top_level_volumes(apps, caddy),
+        networks: network(&network_name),
         ..Default::default()
     };
 
     serde_yaml::to_string(&compose).expect("failed to serialize compose")
 }
 
-fn caddy_service(app: &App) -> Service {
+fn caddy_service(apps: &[App], network_name: &str) -> Service {
     let mut depends = IndexMap::new();
-    depends.insert(app.name.clone(), DependsCondition::service_healthy());
+    for app in apps {
+        depends.insert(app.name.clone(), DependsCondition::service_healthy());
+    }
 
     Service {
         image: Some("caddy:2-alpine".to_string()),
-        container_name: Some(format!("{}-caddy", app.name)),
+        container_name: Some(format!("{}-caddy", apps[0].name)),
         restart: Some("unless-stopped".to_string()),
         ports: Ports::Short(vec!["80:80".to_string(), "443:443".to_string()]),
         volumes: vec![
@@ -47,12 +57,12 @@ fn caddy_service(app: &App) -> Service {
             Volumes::Simple("caddy-config:/config".to_string()),
         ],
         depends_on: DependsOnOptions::Conditional(depends),
-        networks: Networks::Simple(vec![format!("{}-network", app.name)]),
+        networks: Networks::Simple(vec![network_name.to_string()]),
         ..Default::default()
     }
 }
 
-fn app_service(app: &App) -> Service {
+fn app_service(app: &App, network_name: &str) -> Service {
     let expose: Vec<String> = app.expose.iter().map(ToString::to_string).collect();
 
     let env_file = app.env_file.as_ref().map(|ef| {
@@ -98,7 +108,7 @@ fn app_service(app: &App) -> Service {
         environment,
         volumes,
         healthcheck,
-        networks: Networks::Simple(vec![format!("{}-network", app.name)]),
+        networks: Networks::Simple(vec![network_name.to_string()]),
         ..Default::default()
     }
 }
@@ -113,14 +123,16 @@ fn local_volume() -> ComposeVolume {
     }
 }
 
-fn top_level_volumes(app: &App, caddy: &Caddy) -> TopLevelVolumes {
+fn top_level_volumes(apps: &[App], caddy: &Caddy) -> TopLevelVolumes {
     let mut vols = IndexMap::new();
 
-    for (name, _) in &app.volumes {
-        vols.insert(name.clone(), MapOrEmpty::Map(local_volume()));
+    for app in apps {
+        for (name, _) in &app.volumes {
+            vols.insert(name.clone(), MapOrEmpty::Map(local_volume()));
+        }
     }
 
-    if caddy.reverse_proxy.is_some() {
+    if caddy.has_upstreams() {
         let local = MapOrEmpty::Map(local_volume());
         vols.insert("caddy-data".to_string(), local.clone());
         vols.insert("caddy-config".to_string(), local);
@@ -129,10 +141,10 @@ fn top_level_volumes(app: &App, caddy: &Caddy) -> TopLevelVolumes {
     TopLevelVolumes(vols)
 }
 
-fn network(app: &App) -> ComposeNetworks {
+fn network(network_name: &str) -> ComposeNetworks {
     let mut nets = IndexMap::new();
     nets.insert(
-        format!("{}-network", app.name),
+        network_name.to_string(),
         MapOrEmpty::Map(NetworkSettings {
             driver: Some("bridge".to_string()),
             ..Default::default()

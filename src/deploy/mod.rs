@@ -18,7 +18,7 @@ pub trait Deployer {
         &self,
         host: &str,
         user: &str,
-        app: &App,
+        apps: &[App],
         caddy: &Caddy,
         remote_dir: &str,
     ) -> DeployResult<()>;

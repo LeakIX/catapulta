@@ -24,13 +24,17 @@ impl DockerSaveLoad {
         Self
     }
 
-    fn check_env_file(app: &App) -> DeployResult<()> {
-        if let Some(env_file) = &app.env_file {
-            if !Path::new(env_file).exists() {
-                return Err(DeployError::FileNotFound(format!(
-                    "{env_file} not found. \
-                     Create from .env.example"
-                )));
+    fn check_env_files(apps: &[App]) -> DeployResult<()> {
+        for app in apps {
+            if let Some(env_file) = &app.env_file {
+                if !Path::new(env_file).exists() {
+                    return Err(DeployError::FileNotFound(format!(
+                        "{env_file} not found for \
+                             app '{}'. Create from \
+                             .env.example",
+                        app.name
+                    )));
+                }
             }
         }
         Ok(())
@@ -79,16 +83,22 @@ impl Deployer for DockerSaveLoad {
         let size_bytes: u64 = size_bytes.parse().unwrap_or(0);
         let size_mb = size_bytes / (1024 * 1024);
 
-        eprintln!("Transferring image {tag} ({size_mb} MB) to {user}@{host}");
+        eprintln!(
+            "Transferring image {tag} ({size_mb} MB) \
+             to {user}@{host}"
+        );
 
-        // Use pv for a progress bar when available, plain pipe otherwise
+        // Use pv for a progress bar when available
         let progress = if cmd::command_exists("pv") {
             format!("pv -s {size_bytes} -p -t -e -r -b")
         } else {
             "cat".to_string()
         };
 
-        eprintln!("  Saving image, compressing, and streaming over SSH...");
+        eprintln!(
+            "  Saving image, compressing, and streaming \
+             over SSH..."
+        );
         let pipeline = format!(
             "docker save {tag} | {progress} | gzip | \
              ssh {user}@{host} 'gunzip | docker load'"
@@ -103,21 +113,19 @@ impl Deployer for DockerSaveLoad {
         &self,
         host: &str,
         user: &str,
-        app: &App,
+        apps: &[App],
         caddy: &Caddy,
         remote_dir: &str,
     ) -> DeployResult<()> {
-        Self::check_env_file(app)?;
+        Self::check_env_files(apps)?;
 
         eprintln!("Deploying to {user}@{host}...");
 
         let ssh = SshSession::new(host, user);
 
-        // Generate Caddyfile
+        // Generate config files
         let caddyfile_content = caddyfile::render(caddy, host);
-
-        // Generate docker-compose.yml
-        let compose_content = compose::render(app, caddy);
+        let compose_content = compose::render(apps, caddy);
 
         // Write generated files to remote
         eprintln!("Writing deployment config...");
@@ -127,10 +135,17 @@ impl Deployer for DockerSaveLoad {
         )?;
         ssh.write_remote_file(&caddyfile_content, &format!("{remote_dir}/Caddyfile"))?;
 
-        // Transfer .env file if specified
-        if let Some(env_file) = &app.env_file {
-            ssh.scp_to(env_file, &format!("{remote_dir}/.env"))?;
-            ssh.exec(&format!("chmod 600 {remote_dir}/.env"))?;
+        // Transfer .env files for each app
+        for app in apps {
+            if let Some(env_file) = &app.env_file {
+                let remote_name = if apps.len() > 1 {
+                    format!("{remote_dir}/.env.{}", app.name)
+                } else {
+                    format!("{remote_dir}/.env")
+                };
+                ssh.scp_to(env_file, &remote_name)?;
+                ssh.exec(&format!("chmod 600 {remote_name}"))?;
+            }
         }
 
         // Restart containers
@@ -142,7 +157,7 @@ impl Deployer for DockerSaveLoad {
         ))?;
 
         // Wait for health
-        wait_healthy(&ssh, app, remote_dir)?;
+        wait_healthy(&ssh, apps, remote_dir)?;
 
         // Show status
         ssh.exec_interactive(&format!("cd {remote_dir} && docker compose ps"))?;
@@ -156,55 +171,65 @@ impl Deployer for DockerSaveLoad {
 }
 
 /// Poll container health status instead of sleeping a fixed
-/// duration. When the app has a healthcheck configured, queries
+/// duration. When an app has a healthcheck configured, queries
 /// `docker inspect` in a loop. Falls back to a brief sleep when
 /// no healthcheck is defined.
-fn wait_healthy(ssh: &SshSession, app: &App, remote_dir: &str) -> DeployResult<()> {
+fn wait_healthy(ssh: &SshSession, apps: &[App], remote_dir: &str) -> DeployResult<()> {
     const MAX_ATTEMPTS: u32 = 30;
     const INTERVAL: Duration = Duration::from_secs(5);
 
-    if app.healthcheck.is_none() {
+    let apps_with_hc: Vec<&App> = apps.iter().filter(|a| a.healthcheck.is_some()).collect();
+
+    if apps_with_hc.is_empty() {
         eprintln!("No healthcheck configured, waiting 5s...");
         thread::sleep(Duration::from_secs(5));
         return Ok(());
     }
 
-    eprintln!("Waiting for container to be healthy...");
+    eprintln!("Waiting for containers to be healthy...");
 
-    for attempt in 1..=MAX_ATTEMPTS {
-        let output = ssh.exec(&format!(
-            "cd {remote_dir} && \
-             docker inspect \
-             --format='{{{{.State.Health.Status}}}}' {}",
-            app.name
-        ));
+    for app in &apps_with_hc {
+        for attempt in 1..=MAX_ATTEMPTS {
+            let output = ssh.exec(&format!(
+                "cd {remote_dir} && \
+                 docker inspect \
+                 --format='{{{{.State.Health.Status}}}}' {}",
+                app.name
+            ));
 
-        match output {
-            Ok(status) => {
-                let status = status.trim();
-                eprint!(
-                    "  Health check ({attempt}/{MAX_ATTEMPTS}): \
-                     {status}"
-                );
-                if status == "healthy" {
-                    eprintln!();
-                    return Ok(());
+            match output {
+                Ok(status) => {
+                    let status = status.trim();
+                    eprint!(
+                        "  {} ({attempt}/{MAX_ATTEMPTS}): \
+                         {status}",
+                        app.name
+                    );
+                    if status == "healthy" {
+                        eprintln!();
+                        break;
+                    }
+                    eprintln!(" - retrying...");
                 }
-                eprintln!(" - retrying...");
+                Err(_) => {
+                    eprintln!(
+                        "  {} ({attempt}/{MAX_ATTEMPTS}): \
+                         waiting for container...",
+                        app.name
+                    );
+                }
             }
-            Err(_) => {
-                eprintln!(
-                    "  Health check ({attempt}/{MAX_ATTEMPTS}): \
-                     waiting for container..."
-                );
-            }
-        }
 
-        thread::sleep(INTERVAL);
+            if attempt == MAX_ATTEMPTS {
+                return Err(DeployError::HealthcheckTimeout(
+                    app.name.clone(),
+                    MAX_ATTEMPTS,
+                ));
+            }
+
+            thread::sleep(INTERVAL);
+        }
     }
 
-    Err(DeployError::HealthcheckTimeout(
-        app.name.clone(),
-        MAX_ATTEMPTS,
-    ))
+    Ok(())
 }

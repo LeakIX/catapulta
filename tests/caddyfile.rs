@@ -127,3 +127,61 @@ fn builder_roundtrip() {
         cf.sites[0].directives.len()
     );
 }
+
+// --- Route-based (multi-app) caddyfile tests ---
+
+#[test]
+fn route_based_handle_blocks() {
+    let caddy = Caddy::new()
+        .route("/api/*", "api:8000")
+        .route("", "web:3000");
+
+    let result = caddyfile::render(&caddy, "example.com");
+
+    assert!(result.contains("handle /api/*"));
+    assert!(result.contains("reverse_proxy api:8000"));
+    assert!(result.contains("reverse_proxy web:3000"));
+    // Catch-all handle has no path matcher
+    assert!(result.contains("\thandle {\n"));
+}
+
+#[test]
+fn routes_override_reverse_proxy() {
+    // When routes are set, reverse_proxy is ignored
+    let caddy = Caddy::new()
+        .reverse_proxy("ignored:9999")
+        .route("/api/*", "api:8000")
+        .route("", "web:3000");
+
+    let result = caddyfile::render(&caddy, "example.com");
+
+    assert!(!result.contains("ignored:9999"));
+    assert!(result.contains("reverse_proxy api:8000"));
+    assert!(result.contains("reverse_proxy web:3000"));
+}
+
+#[test]
+fn routes_with_gzip_and_headers() {
+    let caddy = Caddy::new()
+        .route("/api/*", "api:8000")
+        .route("", "web:3000")
+        .gzip()
+        .security_headers();
+
+    let result = caddyfile::render(&caddy, "example.com");
+
+    assert!(result.contains("handle /api/*"));
+    assert!(result.contains("encode gzip"));
+    assert!(result.contains("X-Frame-Options"));
+}
+
+#[test]
+fn single_reverse_proxy_backwards_compat() {
+    // Old-style single upstream still works
+    let caddy = Caddy::new().reverse_proxy("app:3000").gzip();
+
+    let result = caddyfile::render(&caddy, "example.com");
+
+    assert!(result.contains("reverse_proxy app:3000"));
+    assert!(!result.contains("handle"));
+}

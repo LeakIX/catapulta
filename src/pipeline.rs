@@ -13,7 +13,7 @@ use crate::ssh::SshSession;
 /// Deployment pipeline orchestrating provisioning, DNS, and
 /// deployment.
 pub struct Pipeline {
-    app: App,
+    apps: Vec<App>,
     caddy: Caddy,
     provisioner: Option<Box<dyn Provisioner>>,
     dns: Option<Box<dyn DnsProvider>>,
@@ -23,10 +23,26 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
+    /// Create a pipeline for a single app.
     #[must_use]
     pub fn new(app: App, caddy: Caddy) -> Self {
         Self {
-            app,
+            apps: vec![app],
+            caddy,
+            provisioner: None,
+            dns: None,
+            deployer: None,
+            remote_dir: "/opt/app".to_string(),
+            ssh_user: "root".to_string(),
+        }
+    }
+
+    /// Create a pipeline for multiple apps behind one Caddy
+    /// reverse proxy.
+    #[must_use]
+    pub fn multi(apps: Vec<App>, caddy: Caddy) -> Self {
+        Self {
+            apps,
             caddy,
             provisioner: None,
             dns: None,
@@ -132,7 +148,7 @@ impl Pipeline {
             eprintln!("DNS record set: {d} -> {}", server.ip);
         }
 
-        provisioner.setup_server(&server, &self.app, &self.caddy, domain)?;
+        provisioner.setup_server(&server, domain)?;
 
         Ok(())
     }
@@ -148,15 +164,19 @@ impl Pipeline {
             .ok_or_else(|| DeployError::Other("no deployer configured".into()))?;
 
         if !skip_build {
-            deployer.build_image(&self.app)?;
+            for app in &self.apps {
+                deployer.build_image(app)?;
+            }
         }
 
-        deployer.transfer_image(&self.app, host, &self.ssh_user)?;
+        for app in &self.apps {
+            deployer.transfer_image(app, host, &self.ssh_user)?;
+        }
 
         deployer.deploy(
             host,
             &self.ssh_user,
-            &self.app,
+            &self.apps,
             &self.caddy,
             &self.remote_dir,
         )?;
@@ -166,7 +186,7 @@ impl Pipeline {
 
     #[allow(clippy::unnecessary_wraps)]
     fn cmd_deploy_dry_run(&self, host: &str) -> DeployResult<()> {
-        let compose_content = compose::render(&self.app, &self.caddy);
+        let compose_content = compose::render(&self.apps, &self.caddy);
         let caddyfile_content = caddyfile::render(&self.caddy, host);
 
         eprintln!("=== Dry run: no changes will be made ===");
@@ -179,15 +199,24 @@ impl Pipeline {
         println!("{caddyfile_content}");
 
         eprintln!("--- Actions that would be performed ---");
-        eprintln!("1. Build Docker image: {}:latest", self.app.name);
-        eprintln!("2. Transfer image to {}@{}", self.ssh_user, host);
-        eprintln!("3. Write config files to {}/", self.remote_dir);
-        if self.app.env_file.is_some() {
-            eprintln!("4. Transfer .env file");
-            eprintln!("5. Restart containers via docker compose");
-        } else {
-            eprintln!("4. Restart containers via docker compose");
+        for (i, app) in self.apps.iter().enumerate() {
+            let n = i + 1;
+            eprintln!("{n}. Build Docker image: {}:latest", app.name);
         }
+        let base = self.apps.len();
+        for (i, app) in self.apps.iter().enumerate() {
+            let n = base + i + 1;
+            eprintln!("{n}. Transfer {} to {}@{}", app.name, self.ssh_user, host);
+        }
+        let mut step = base * 2 + 1;
+        eprintln!("{step}. Write config files to {}/", self.remote_dir);
+        step += 1;
+        let has_env = self.apps.iter().any(|a| a.env_file.is_some());
+        if has_env {
+            eprintln!("{step}. Transfer .env file(s)");
+            step += 1;
+        }
+        eprintln!("{step}. Restart containers via docker compose");
 
         Ok(())
     }
