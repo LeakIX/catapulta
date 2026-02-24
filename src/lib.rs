@@ -1,5 +1,9 @@
 //! Declarative deployment DSL for Rust.
 //!
+//! [Repository](https://github.com/LeakIX/catapulta) |
+//! [Online docs](https://leakix.github.io/catapulta/catapulta/) |
+//! [crates.io](https://crates.io/crates/catapulta)
+//!
 //! Catapulta lets you provision cloud servers, configure DNS, and
 //! deploy Docker containers - all from a typed Rust DSL. No YAML,
 //! no shell scripts, no manual SSH.
