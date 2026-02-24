@@ -14,9 +14,15 @@ All notable changes to this project will be documented in this file.
 - Beginner-friendly rustdoc guide for home lab setup with libvirt/KVM
   ([abdd0ce], [#5])
 - Libvirt deployment example in `examples/libvirt_deploy.rs` ([abdd0ce], [#5])
+- `Upstream` struct for type-safe Caddy reverse proxy references
+  ([f90cfa7])
+- `App::upstream()` and `App::upstream_port()` to derive upstream
+  from exposed ports ([f90cfa7])
 
 ### Changed
 
+- `Caddy::reverse_proxy()` and `Caddy::route()` now accept
+  `impl Into<String>` instead of `&str` ([f90cfa7])
 - `cmd_provision` now calls generic `detect_ssh_key()` instead of
   DO-specific function ([abdd0ce], [#5])
 
@@ -72,6 +78,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[f90cfa7]: https://github.com/LeakIX/catapulta/commit/f90cfa7
 [abdd0ce]: https://github.com/LeakIX/catapulta/commit/abdd0ce
 [07e32cf]: https://github.com/LeakIX/catapulta/commit/07e32cf
 [c25734f]: https://github.com/LeakIX/catapulta/commit/c25734f
