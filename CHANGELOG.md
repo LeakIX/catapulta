@@ -1,0 +1,71 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [0.2.0] - 2026-02-24
+
+### Added
+
+- Support multiple apps in a single Pipeline with path-based Caddy routing
+  ([07e32cf], [#4])
+- `Caddy::route()` builder for `handle` block path routing ([07e32cf], [#4])
+- `Caddy::has_upstreams()` helper method ([07e32cf], [#4])
+- `Pipeline::multi()` constructor for multi-app deployments ([07e32cf], [#4])
+- Multi-app example in `examples/multi_app.rs` ([07e32cf], [#4])
+- `--dry-run` flag to preview generated files without deploying ([c25734f])
+- `status` subcommand to show container status on remote server ([c25734f])
+- Healthcheck polling instead of fixed sleep during deploy ([c25734f])
+- Image size logging and progress bar (via `pv`) during transfer ([bbaf467])
+- All examples rendered in rustdoc under Architecture section ([e7d6469])
+- Repository, docs, and crates.io links in rustdoc header ([837af24])
+
+### Changed
+
+- `compose::render()` now accepts `&[App]` instead of `&App` ([07e32cf], [#4])
+- `Deployer::deploy()` now accepts `&[App]` instead of `&App` ([07e32cf], [#4])
+- `Provisioner::setup_server()` no longer requires `&App` and `&Caddy`
+  params ([07e32cf], [#4])
+- Caddy service in compose depends on all apps, not just one ([07e32cf], [#4])
+- Network named after first app, shared by all services ([07e32cf], [#4])
+- `.env` files transferred as `.env.{app.name}` for multi-app setups
+  ([07e32cf], [#4])
+
+### Infrastructure
+
+- Extracted server setup to bash script ([c0747ef])
+- Moved unit tests to integration tests ([4faf950])
+- Fixed nightly rustfmt formatting ([ffb0790])
+
+## [0.1.0] - 2025-06-01
+
+### Added
+
+- Initial release with declarative deployment DSL
+- `App` builder for Docker container configuration
+- `Caddy` builder for reverse proxy with TLS, gzip, security headers, basic
+  auth
+- `Pipeline` orchestrator with provision, DNS, and deploy phases
+- DigitalOcean provisioner via `doctl` CLI
+- OVH DNS provider via REST API
+- Cloudflare DNS provider via API
+- Docker save/load deployment strategy (no registry required)
+- Caddyfile and docker-compose.yml generation
+- SSH session management with key detection
+- `provision`, `deploy`, `destroy` CLI subcommands
+
+<!-- Commit links -->
+[07e32cf]: https://github.com/LeakIX/catapulta/commit/07e32cf
+[c25734f]: https://github.com/LeakIX/catapulta/commit/c25734f
+[bbaf467]: https://github.com/LeakIX/catapulta/commit/bbaf467
+[4faf950]: https://github.com/LeakIX/catapulta/commit/4faf950
+[c0747ef]: https://github.com/LeakIX/catapulta/commit/c0747ef
+[ffb0790]: https://github.com/LeakIX/catapulta/commit/ffb0790
+[e7d6469]: https://github.com/LeakIX/catapulta/commit/e7d6469
+[837af24]: https://github.com/LeakIX/catapulta/commit/837af24
+
+<!-- PR/Issue links -->
+[#4]: https://github.com/LeakIX/catapulta/issues/4
+
+<!-- Release links -->
+[0.2.0]: https://github.com/LeakIX/catapulta/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/LeakIX/catapulta/releases/tag/v0.1.0
