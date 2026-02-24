@@ -1,5 +1,5 @@
 use catapulta::DigitalOcean;
-use catapulta::provision::digitalocean::remove_ssh_host_entry;
+use catapulta::provision::remove_ssh_host_entry;
 
 #[test]
 fn defaults() {

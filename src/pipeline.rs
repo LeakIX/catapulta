@@ -134,7 +134,7 @@ impl Pipeline {
         }
 
         // Detect SSH key
-        let (key_id, _) = detect_do_ssh_key()?;
+        let (key_id, _) = provisioner.detect_ssh_key()?;
 
         let region = region.unwrap_or("fra1");
 
@@ -321,35 +321,4 @@ enum Command {
         #[arg(long)]
         domain: Option<String>,
     },
-}
-
-/// Detect SSH key registered with `DigitalOcean`. Returns
-/// (`key_id`, `key_file`).
-fn detect_do_ssh_key() -> DeployResult<(String, String)> {
-    use crate::cmd;
-
-    let output = cmd::run(
-        "doctl",
-        &[
-            "compute",
-            "ssh-key",
-            "list",
-            "--format",
-            "ID,FingerPrint",
-            "--no-header",
-        ],
-    )?;
-
-    let first_line = output.lines().next().ok_or_else(|| {
-        DeployError::PrerequisiteMissing("no SSH keys found in DigitalOcean".into())
-    })?;
-
-    let parts: Vec<&str> = first_line.split_whitespace().collect();
-    if parts.len() < 2 {
-        return Err(DeployError::PrerequisiteMissing(
-            "unexpected doctl ssh-key list format".into(),
-        ));
-    }
-
-    Ok((parts[0].to_string(), parts[1].to_string()))
 }

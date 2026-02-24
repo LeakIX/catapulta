@@ -208,6 +208,166 @@
 //! }
 //! ```
 //!
+//! ## Home lab deployment with libvirt/KVM
+//!
+//! If you have a spare Linux machine (desktop, server, old
+//! laptop), you can use it as a hypervisor to run VMs instead
+//! of renting cloud servers. Catapulta's [`Libvirt`] provisioner
+//! automates VM creation over SSH so your workflow stays the
+//! same as with cloud providers.
+//!
+//! ### What is a hypervisor?
+//!
+//! A **hypervisor** is software that runs virtual machines (VMs).
+//! **KVM** is the hypervisor built into the Linux kernel, and
+//! **libvirt** is the management layer that provides tools like
+//! `virsh` and `virt-install` to create and control VMs.
+//! Together they let one physical machine run many isolated VMs,
+//! each with its own OS, IP address, and resources.
+//!
+//! ### Minimum hardware
+//!
+//! Any `x86_64` Linux machine with:
+//!
+//! - 8 GB RAM (each VM uses 2 GB by default)
+//! - 50 GB free disk space
+//! - CPU with virtualization extensions (Intel VT-x or AMD-V,
+//!   almost every CPU made after 2010 has this)
+//!
+//! Verify with: `grep -cE 'vmx|svm' /proc/cpuinfo` (should
+//! print a number greater than 0).
+//!
+//! ### Setting up the hypervisor
+//!
+//! On the hypervisor machine (Ubuntu/Debian):
+//!
+//! ```sh
+//! # Install KVM and libvirt
+//! sudo apt update
+//! sudo apt install -y qemu-kvm libvirt-daemon-system \
+//!     virtinst genisoimage
+//!
+//! # Enable and start libvirtd
+//! sudo systemctl enable --now libvirtd
+//!
+//! # Verify it works
+//! virsh list --all
+//! ```
+//!
+//! Make sure you can SSH into this machine from your development
+//! workstation (the machine where you run `cargo xtask`).
+//!
+//! ### Networking: bridged vs NAT
+//!
+//! **NAT** (default) puts VMs behind a virtual router
+//! (`virbr0`). VMs can reach the internet but are only
+//! accessible from the hypervisor. Good for testing.
+//!
+//! **Bridged** connects VMs directly to your LAN. They get a
+//! real IP on your network (e.g. `192.168.1.x`) and are
+//! reachable from any device. Required if you want to expose
+//! services or access VMs from other machines.
+//!
+//! To create a bridge on the hypervisor (netplan example):
+//!
+//! ```yaml
+//! # /etc/netplan/01-bridge.yaml
+//! network:
+//!   version: 2
+//!   ethernets:
+//!     enp3s0:
+//!       dhcp4: false
+//!   bridges:
+//!     br0:
+//!       interfaces: [enp3s0]
+//!       dhcp4: true
+//! ```
+//!
+//! Then `sudo netplan apply`.
+//!
+//! ### Cloud images and cloud-init
+//!
+//! Instead of installing an OS from an ISO (like you would on a
+//! physical machine), cloud images are pre-built disk images
+//! that boot in seconds. **cloud-init** is the tool that
+//! configures the image on first boot: it sets the hostname,
+//! injects your SSH key, and runs any startup commands.
+//!
+//! Catapulta downloads the cloud image once, copies it for each
+//! VM, and generates a small "seed ISO" containing the
+//! cloud-init configuration. The VM reads this ISO on first
+//! boot and configures itself automatically.
+//!
+//! ### SSH key setup
+//!
+//! Generate a key pair if you don't have one:
+//!
+//! ```sh
+//! ssh-keygen -t ed25519 -f ~/.ssh/id_homelab
+//! ```
+//!
+//! Pass the private key path to the Libvirt provisioner.
+//! Catapulta reads the `.pub` sibling and injects it into the
+//! VM via cloud-init.
+//!
+//! ### Complete example
+//!
+//! ```rust,no_run
+//! use catapulta::{
+//!     App, Caddy, DockerSaveLoad, Libvirt, NetworkMode,
+//!     Pipeline,
+//! };
+//!
+//! fn main() -> anyhow::Result<()> {
+//!     let app = App::new("my-service")
+//!         .dockerfile("Dockerfile")
+//!         .env("PORT", "3000")
+//!         .healthcheck("curl -f http://localhost:3000/")
+//!         .expose(3000);
+//!
+//!     let caddy = Caddy::new()
+//!         .reverse_proxy("my-service:3000")
+//!         .gzip()
+//!         .security_headers();
+//!
+//!     let pipeline = Pipeline::new(app, caddy)
+//!         .provision(
+//!             Libvirt::new("hypervisor.local", "~/.ssh/id_homelab")
+//!                 .network(NetworkMode::Bridged("br0".into()))
+//!                 .vcpus(2)
+//!                 .memory_mib(2048)
+//!                 .disk_gib(20),
+//!         )
+//!         .deploy(DockerSaveLoad::new());
+//!
+//!     pipeline.run()?;
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ### Troubleshooting
+//!
+//! **VM has no IP address:**
+//! NAT VMs need the DHCP server on `virbr0` to be running.
+//! Check with `virsh net-list`. If "default" is inactive, start
+//! it: `virsh net-start default`. For bridged VMs, ensure the
+//! bridge has a DHCP server on the LAN or configure a static IP
+//! in cloud-init.
+//!
+//! **SSH connection timeout:**
+//! The VM may still be booting. Catapulta retries automatically
+//! (30 attempts, 10 seconds apart). If it still fails, SSH to
+//! the hypervisor and check the VM console:
+//! `virsh console <vm-name>`.
+//!
+//! **"virsh: command not found":**
+//! libvirt is not installed on the hypervisor. See the setup
+//! section above.
+//!
+//! **Permission denied on virsh:**
+//! Add your hypervisor user to the libvirt group:
+//! `sudo usermod -aG libvirt $USER`, then log out and back in.
+//!
 //! [`Provisioner`]: provision::Provisioner
 //! [`DnsProvider`]: dns::DnsProvider
 //! [`Deployer`]: deploy::Deployer
@@ -241,4 +401,6 @@ pub use dns::ovh::OvhCredentials;
 pub use dns::ovh::parse_ini_value;
 pub use pipeline::Pipeline;
 pub use provision::digitalocean::DigitalOcean;
-pub use provision::digitalocean::remove_ssh_host_entry;
+pub use provision::libvirt::Libvirt;
+pub use provision::libvirt::NetworkMode;
+pub use provision::remove_ssh_host_entry;

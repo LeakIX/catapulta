@@ -42,7 +42,7 @@ impl DigitalOcean {
 
     /// Detect the SSH key registered with `DigitalOcean` and
     /// find the matching local private key.
-    fn detect_ssh_key() -> DeployResult<(String, String)> {
+    fn detect_do_ssh_key() -> DeployResult<(String, String)> {
         let output = cmd::run(
             "doctl",
             &[
@@ -143,52 +143,6 @@ impl DigitalOcean {
         let escaped = script.replace('\'', "'\\''");
         ssh.exec_interactive(&format!("bash -c '{escaped}' _ '{domain}' '{remote_dir}'"))
     }
-
-    /// Add an entry to `~/.ssh/config` for the server.
-    fn setup_ssh_config(ip: &str, host_alias: &str, key_file: &str) -> DeployResult<()> {
-        let home = std::env::var("HOME").map_err(|_| DeployError::EnvMissing("HOME".into()))?;
-        let config_path = PathBuf::from(&home).join(".ssh").join("config");
-
-        let mut content = if config_path.exists() {
-            std::fs::read_to_string(&config_path)?
-        } else {
-            String::new()
-        };
-
-        // Remove existing entry for this host alias
-        content = remove_ssh_host_entry(&content, host_alias);
-
-        // Append new entry
-        let entry = format!(
-            "\nHost {host_alias}\n    \
-             HostName {ip}\n    \
-             User root\n    \
-             IdentityFile {key_file}\n    \
-             StrictHostKeyChecking no\n"
-        );
-        content.push_str(&entry);
-
-        std::fs::write(&config_path, &content)?;
-        eprintln!("SSH config: ssh {host_alias}");
-        Ok(())
-    }
-
-    /// Remove an SSH host entry from `~/.ssh/config`.
-    fn remove_ssh_config_entry(host_alias: &str) -> DeployResult<()> {
-        let home = std::env::var("HOME").map_err(|_| DeployError::EnvMissing("HOME".into()))?;
-        let config_path = PathBuf::from(&home).join(".ssh").join("config");
-
-        if !config_path.exists() {
-            return Ok(());
-        }
-
-        let content = std::fs::read_to_string(&config_path)?;
-        let updated = remove_ssh_host_entry(&content, host_alias);
-        std::fs::write(&config_path, updated)?;
-
-        eprintln!("SSH config entry removed: {host_alias}");
-        Ok(())
-    }
 }
 
 impl Default for DigitalOcean {
@@ -219,6 +173,10 @@ impl Provisioner for DigitalOcean {
 
         eprintln!("Prerequisites OK");
         Ok(())
+    }
+
+    fn detect_ssh_key(&self) -> DeployResult<(String, String)> {
+        Self::detect_do_ssh_key()
     }
 
     fn create_server(
@@ -255,7 +213,7 @@ impl Provisioner for DigitalOcean {
         // We need to find the SSH key file again for the
         // ServerInfo - detect_ssh_key provides both id and
         // file.
-        let (_, key_file) = Self::detect_ssh_key()?;
+        let (_, key_file) = Self::detect_do_ssh_key()?;
 
         Ok(ServerInfo {
             name: name.to_string(),
@@ -278,7 +236,7 @@ impl Provisioner for DigitalOcean {
 
         // Setup SSH config
         let host_alias = domain.unwrap_or(&server.name);
-        Self::setup_ssh_config(&server.ip, host_alias, &server.ssh_key_file)?;
+        super::setup_ssh_config(&server.ip, host_alias, &server.ssh_key_file)?;
 
         eprintln!();
         eprintln!("========================================");
@@ -317,7 +275,7 @@ impl Provisioner for DigitalOcean {
         for line in output.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 3 && parts[0] == name {
-                let (_, key_file) = Self::detect_ssh_key()?;
+                let (_, key_file) = Self::detect_do_ssh_key()?;
                 return Ok(Some(ServerInfo {
                     name: name.to_string(),
                     ip: parts[1].to_string(),
@@ -364,40 +322,8 @@ impl Provisioner for DigitalOcean {
         eprintln!("Droplet '{name}' deleted");
 
         // Remove SSH config entry
-        Self::remove_ssh_config_entry(name)?;
+        super::remove_ssh_config_entry(name)?;
 
         Ok(())
     }
-}
-
-/// Remove a Host block from SSH config content.
-#[must_use]
-pub fn remove_ssh_host_entry(content: &str, host: &str) -> String {
-    let mut result = Vec::new();
-    let mut skip = false;
-    let header = format!("Host {host}");
-
-    for line in content.lines() {
-        if line.trim() == header {
-            skip = true;
-            continue;
-        }
-        if skip {
-            // If we hit a new Host block or a non-indented line
-            // (that isn't empty), stop skipping
-            if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
-                skip = false;
-                result.push(line);
-            }
-            continue;
-        }
-        result.push(line);
-    }
-
-    let mut out = result.join("\n");
-    // Clean up multiple blank lines
-    while out.contains("\n\n\n") {
-        out = out.replace("\n\n\n", "\n\n");
-    }
-    out
 }
