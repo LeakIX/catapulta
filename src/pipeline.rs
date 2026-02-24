@@ -16,7 +16,7 @@ pub struct Pipeline {
     apps: Vec<App>,
     caddy: Caddy,
     provisioner: Option<Box<dyn Provisioner>>,
-    dns: Option<Box<dyn DnsProvider>>,
+    dns: Vec<Box<dyn DnsProvider>>,
     deployer: Option<Box<dyn Deployer>>,
     remote_dir: String,
     ssh_user: String,
@@ -30,7 +30,7 @@ impl Pipeline {
             apps: vec![app],
             caddy,
             provisioner: None,
-            dns: None,
+            dns: Vec::new(),
             deployer: None,
             remote_dir: "/opt/app".to_string(),
             ssh_user: "root".to_string(),
@@ -45,7 +45,7 @@ impl Pipeline {
             apps,
             caddy,
             provisioner: None,
-            dns: None,
+            dns: Vec::new(),
             deployer: None,
             remote_dir: "/opt/app".to_string(),
             ssh_user: "root".to_string(),
@@ -60,7 +60,7 @@ impl Pipeline {
 
     #[must_use]
     pub fn dns(mut self, provider: impl DnsProvider + 'static) -> Self {
-        self.dns = Some(Box::new(provider));
+        self.dns.push(Box::new(provider));
         self
     }
 
@@ -142,10 +142,13 @@ impl Pipeline {
         // by the time Caddy requests a TLS certificate
         let server = provisioner.create_server(name, region, &key_id)?;
 
-        if let (Some(dns), Some(d)) = (&self.dns, domain) {
-            eprintln!("Setting up DNS...");
-            dns.upsert_a_record(&server.ip)?;
-            eprintln!("DNS record set: {d} -> {}", server.ip);
+        if domain.is_some() {
+            for dns in &self.dns {
+                let d = dns.domain();
+                eprintln!("Setting up DNS for {d}...");
+                dns.upsert_a_record(&server.ip)?;
+                eprintln!("DNS record set: {d} -> {}", server.ip);
+            }
         }
 
         provisioner.setup_server(&server, domain)?;
@@ -237,8 +240,10 @@ impl Pipeline {
             "WARNING: This will permanently delete \
              droplet '{name}'"
         );
-        if let Some(d) = domain {
-            eprintln!("and DNS record for {d}");
+        if domain.is_some() {
+            for dns in &self.dns {
+                eprintln!("and DNS record for {}", dns.domain());
+            }
         }
         eprintln!();
 
@@ -253,10 +258,11 @@ impl Pipeline {
 
         provisioner.destroy_server(name)?;
 
-        // Remove DNS record
-        if let Some(dns) = &self.dns {
-            if domain.is_some() {
-                eprintln!("Removing DNS record...");
+        // Remove DNS records
+        if domain.is_some() {
+            for dns in &self.dns {
+                let d = dns.domain();
+                eprintln!("Removing DNS record for {d}...");
                 dns.delete_a_record()?;
             }
         }
