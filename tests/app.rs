@@ -68,3 +68,48 @@ fn env_file_overrides() {
 
     assert_eq!(app.env_file.as_deref(), Some("second.env"));
 }
+
+#[test]
+fn upstream_uses_first_port() {
+    let app = App::new("api").expose(8000).expose(9000);
+
+    let up = app.upstream();
+
+    assert_eq!(up.name, "api");
+    assert_eq!(up.port, 8000);
+    assert_eq!(up.to_string(), "api:8000");
+}
+
+#[test]
+fn upstream_port_selects_specific_port() {
+    let app = App::new("web").expose(3000).expose(8080);
+
+    let up = app.upstream_port(8080);
+
+    assert_eq!(up.name, "web");
+    assert_eq!(up.port, 8080);
+    assert_eq!(up.to_string(), "web:8080");
+}
+
+#[test]
+fn upstream_into_string() {
+    let app = App::new("svc").expose(5000);
+
+    let s: String = app.upstream().into();
+
+    assert_eq!(s, "svc:5000");
+}
+
+#[test]
+#[should_panic(expected = "at least one exposed port")]
+fn upstream_panics_without_ports() {
+    let app = App::new("empty");
+    let _ = app.upstream();
+}
+
+#[test]
+#[should_panic(expected = "port 9999 is not exposed")]
+fn upstream_port_panics_for_unknown_port() {
+    let app = App::new("svc").expose(3000);
+    let _ = app.upstream_port(9999);
+}

@@ -36,7 +36,7 @@ fn main() -> anyhow::Result<()> {
         .expose(3000);
 
     let caddy = Caddy::new()
-        .reverse_proxy("my-app:3000")
+        .reverse_proxy(app.upstream())
         .gzip()
         .security_headers();
 

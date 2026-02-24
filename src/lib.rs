@@ -59,7 +59,7 @@
 //!         .expose(3000);
 //!
 //!     let caddy = Caddy::new()
-//!         .reverse_proxy("my-service:3000")
+//!         .reverse_proxy(app.upstream())
 //!         .gzip()
 //!         .security_headers();
 //!
@@ -118,8 +118,8 @@
 //!     //   /api/*  ->  api:8000
 //!     //   /*      ->  web:3000  (catch-all)
 //!     let caddy = Caddy::new()
-//!         .route("/api/*", "api:8000")
-//!         .route("", "web:3000")
+//!         .route("/api/*", api.upstream())
+//!         .route("", web.upstream())
 //!         .gzip()
 //!         .security_headers();
 //!
@@ -152,7 +152,7 @@
 //!         .expose(3000);
 //!
 //!     let caddy =
-//!         Caddy::new().reverse_proxy("my-service:3000").gzip();
+//!         Caddy::new().reverse_proxy(app.upstream()).gzip();
 //!
 //!     let pipeline = Pipeline::new(app, caddy)
 //!         .provision(DigitalOcean::new())
@@ -194,7 +194,7 @@
 //!             "admin",
 //!             "$2a$14$YOUR_BCRYPT_HASH_HERE",
 //!         )
-//!         .reverse_proxy("internal-tool:8080")
+//!         .reverse_proxy(app.upstream())
 //!         .gzip()
 //!         .security_headers();
 //!
@@ -326,7 +326,7 @@
 //!         .expose(3000);
 //!
 //!     let caddy = Caddy::new()
-//!         .reverse_proxy("my-service:3000")
+//!         .reverse_proxy(app.upstream())
 //!         .gzip()
 //!         .security_headers();
 //!
@@ -393,6 +393,7 @@ pub mod provision;
 pub mod ssh;
 
 pub use app::App;
+pub use app::Upstream;
 pub use caddy::Caddy;
 pub use deploy::docker_save::DockerSaveLoad;
 pub use dns::cloudflare::Cloudflare;

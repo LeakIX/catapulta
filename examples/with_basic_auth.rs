@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
 
     let caddy = Caddy::new()
         .basic_auth("admin", "$2a$14$YOUR_BCRYPT_HASH_HERE")
-        .reverse_proxy("internal-tool:8080")
+        .reverse_proxy(app.upstream())
         .gzip()
         .security_headers();
 

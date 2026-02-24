@@ -38,8 +38,8 @@ fn main() -> anyhow::Result<()> {
     //   /api/*  ->  api:8000
     //   /*      ->  web:3000   (catch-all)
     let caddy = Caddy::new()
-        .route("/api/*", "api:8000")
-        .route("", "web:3000")
+        .route("/api/*", api.upstream())
+        .route("", web.upstream())
         .gzip()
         .security_headers();
 

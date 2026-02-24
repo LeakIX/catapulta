@@ -1,4 +1,4 @@
-use catapulta::Caddy;
+use catapulta::{App, Caddy};
 
 #[test]
 fn defaults() {
@@ -47,4 +47,31 @@ fn reverse_proxy_overrides() {
         .reverse_proxy("app:8080");
 
     assert_eq!(caddy.reverse_proxy.as_deref(), Some("app:8080"));
+}
+
+#[test]
+fn reverse_proxy_accepts_upstream() {
+    let app = App::new("svc").expose(5000);
+
+    let caddy = Caddy::new().reverse_proxy(app.upstream());
+
+    assert_eq!(caddy.reverse_proxy.as_deref(), Some("svc:5000"));
+}
+
+#[test]
+fn route_accepts_upstream() {
+    let api = App::new("api").expose(8000);
+    let web = App::new("web").expose(3000);
+
+    let caddy = Caddy::new()
+        .route("/api/*", api.upstream())
+        .route("", web.upstream());
+
+    assert_eq!(
+        caddy.routes,
+        vec![
+            ("/api/*".into(), "api:8000".into()),
+            (String::new(), "web:3000".into()),
+        ]
+    );
 }

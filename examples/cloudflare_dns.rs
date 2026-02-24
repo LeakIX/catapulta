@@ -12,7 +12,7 @@ fn main() -> anyhow::Result<()> {
         .healthcheck("curl -f http://localhost:3000/")
         .expose(3000);
 
-    let caddy = Caddy::new().reverse_proxy("my-service:3000").gzip();
+    let caddy = Caddy::new().reverse_proxy(app.upstream()).gzip();
 
     let pipeline = Pipeline::new(app, caddy)
         .provision(DigitalOcean::new())

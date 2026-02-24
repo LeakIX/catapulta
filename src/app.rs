@@ -1,3 +1,39 @@
+use std::fmt;
+
+/// A resolved upstream address: container name + port.
+///
+/// Produced by [`App::upstream`] and [`App::upstream_port`] so
+/// the compiler catches mismatches between app names/ports and
+/// Caddy configuration.
+///
+/// # Example
+///
+/// ```
+/// use catapulta::App;
+///
+/// let app = App::new("api").expose(8000);
+/// let upstream = app.upstream();
+///
+/// assert_eq!(upstream.to_string(), "api:8000");
+/// ```
+#[derive(Debug, Clone)]
+pub struct Upstream {
+    pub name: String,
+    pub port: u16,
+}
+
+impl fmt::Display for Upstream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.name, self.port)
+    }
+}
+
+impl From<Upstream> for String {
+    fn from(u: Upstream) -> Self {
+        u.to_string()
+    }
+}
+
 /// Defines the application container: image, environment,
 /// volumes, health checks, and exposed ports.
 ///
@@ -92,5 +128,40 @@ impl App {
     pub fn healthcheck(mut self, cmd: &str) -> Self {
         self.healthcheck = Some(cmd.to_string());
         self
+    }
+
+    /// Return an [`Upstream`] using the first exposed port.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no ports have been exposed via [`App::expose`].
+    #[must_use]
+    pub fn upstream(&self) -> Upstream {
+        let port = self
+            .expose
+            .first()
+            .expect("upstream() requires at least one exposed port");
+        Upstream {
+            name: self.name.clone(),
+            port: *port,
+        }
+    }
+
+    /// Return an [`Upstream`] for a specific port.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `port` is not in the list of exposed ports.
+    #[must_use]
+    pub fn upstream_port(&self, port: u16) -> Upstream {
+        assert!(
+            self.expose.contains(&port),
+            "port {port} is not exposed on app '{}'",
+            self.name,
+        );
+        Upstream {
+            name: self.name.clone(),
+            port,
+        }
     }
 }

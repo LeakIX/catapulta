@@ -3,10 +3,12 @@
 /// # Example
 ///
 /// ```
-/// use catapulta::Caddy;
+/// use catapulta::{App, Caddy};
+///
+/// let app = App::new("my-service").expose(3000);
 ///
 /// let caddy = Caddy::new()
-///     .reverse_proxy("my-service:3000")
+///     .reverse_proxy(app.upstream())
 ///     .gzip()
 ///     .security_headers();
 ///
@@ -40,8 +42,8 @@ impl Caddy {
     }
 
     #[must_use]
-    pub fn reverse_proxy(mut self, upstream: &str) -> Self {
-        self.reverse_proxy = Some(upstream.to_string());
+    pub fn reverse_proxy(mut self, upstream: impl Into<String>) -> Self {
+        self.reverse_proxy = Some(upstream.into());
         self
     }
 
@@ -62,8 +64,8 @@ impl Caddy {
     /// Use `/*` suffix for prefix matching. The last route
     /// without a path matcher becomes the catch-all `handle`.
     #[must_use]
-    pub fn route(mut self, path: &str, upstream: &str) -> Self {
-        self.routes.push((path.to_string(), upstream.to_string()));
+    pub fn route(mut self, path: &str, upstream: impl Into<String>) -> Self {
+        self.routes.push((path.to_string(), upstream.into()));
         self
     }
 
