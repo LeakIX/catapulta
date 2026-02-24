@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Libvirt/KVM provisioner for home lab deployments with bridged and NAT
+  networking ([abdd0ce], [#5])
+- `NetworkMode` enum for choosing bridged or NAT VM networking ([abdd0ce], [#5])
+- `detect_ssh_key` default method on `Provisioner` trait ([abdd0ce], [#5])
+- Shared SSH config helpers extracted to `provision` module ([abdd0ce], [#5])
+- Beginner-friendly rustdoc guide for home lab setup with libvirt/KVM
+  ([abdd0ce], [#5])
+- Libvirt deployment example in `examples/libvirt_deploy.rs` ([abdd0ce], [#5])
+
+### Changed
+
+- `cmd_provision` now calls generic `detect_ssh_key()` instead of
+  DO-specific function ([abdd0ce], [#5])
+
 ## [0.2.0] - 2026-02-24
 
 ### Added
@@ -54,6 +72,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[abdd0ce]: https://github.com/LeakIX/catapulta/commit/abdd0ce
 [07e32cf]: https://github.com/LeakIX/catapulta/commit/07e32cf
 [c25734f]: https://github.com/LeakIX/catapulta/commit/c25734f
 [bbaf467]: https://github.com/LeakIX/catapulta/commit/bbaf467
@@ -64,6 +83,7 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#5]: https://github.com/LeakIX/catapulta/issues/5
 [#4]: https://github.com/LeakIX/catapulta/issues/4
 
 <!-- Release links -->
