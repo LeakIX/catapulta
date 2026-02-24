@@ -137,12 +137,7 @@ impl Pipeline {
         Ok(())
     }
 
-    fn cmd_deploy(
-        &self,
-        host: &str,
-        skip_build: bool,
-        dry_run: bool,
-    ) -> DeployResult<()> {
+    fn cmd_deploy(&self, host: &str, skip_build: bool, dry_run: bool) -> DeployResult<()> {
         if dry_run {
             return self.cmd_deploy_dry_run(host);
         }
@@ -150,9 +145,7 @@ impl Pipeline {
         let deployer = self
             .deployer
             .as_ref()
-            .ok_or_else(|| {
-                DeployError::Other("no deployer configured".into())
-            })?;
+            .ok_or_else(|| DeployError::Other("no deployer configured".into()))?;
 
         if !skip_build {
             deployer.build_image(&self.app)?;
@@ -186,18 +179,9 @@ impl Pipeline {
         println!("{caddyfile_content}");
 
         eprintln!("--- Actions that would be performed ---");
-        eprintln!(
-            "1. Build Docker image: {}:latest",
-            self.app.name
-        );
-        eprintln!(
-            "2. Transfer image to {}@{}",
-            self.ssh_user, host
-        );
-        eprintln!(
-            "3. Write config files to {}/",
-            self.remote_dir
-        );
+        eprintln!("1. Build Docker image: {}:latest", self.app.name);
+        eprintln!("2. Transfer image to {}@{}", self.ssh_user, host);
+        eprintln!("3. Write config files to {}/", self.remote_dir);
         if self.app.env_file.is_some() {
             eprintln!("4. Transfer .env file");
             eprintln!("5. Restart containers via docker compose");
@@ -210,10 +194,7 @@ impl Pipeline {
 
     fn cmd_status(&self, host: &str) -> DeployResult<()> {
         let ssh = SshSession::new(host, &self.ssh_user);
-        ssh.exec_interactive(&format!(
-            "cd {} && docker compose ps",
-            self.remote_dir
-        ))
+        ssh.exec_interactive(&format!("cd {} && docker compose ps", self.remote_dir))
     }
 
     fn cmd_destroy(&self, name: &str, domain: Option<&str>) -> DeployResult<()> {

@@ -145,9 +145,7 @@ impl Deployer for DockerSaveLoad {
         wait_healthy(&ssh, app, remote_dir)?;
 
         // Show status
-        ssh.exec_interactive(
-            &format!("cd {remote_dir} && docker compose ps"),
-        )?;
+        ssh.exec_interactive(&format!("cd {remote_dir} && docker compose ps"))?;
 
         eprintln!();
         eprintln!("Deployment complete!");
@@ -161,11 +159,7 @@ impl Deployer for DockerSaveLoad {
 /// duration. When the app has a healthcheck configured, queries
 /// `docker inspect` in a loop. Falls back to a brief sleep when
 /// no healthcheck is defined.
-fn wait_healthy(
-    ssh: &SshSession,
-    app: &App,
-    remote_dir: &str,
-) -> DeployResult<()> {
+fn wait_healthy(ssh: &SshSession, app: &App, remote_dir: &str) -> DeployResult<()> {
     const MAX_ATTEMPTS: u32 = 30;
     const INTERVAL: Duration = Duration::from_secs(5);
 
