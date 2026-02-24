@@ -15,7 +15,7 @@ pub fn render(caddy: &Caddy, domain: &str) -> String {
     if !caddy.routes.is_empty() {
         site = add_route_handles(site, &caddy.routes);
     } else if let Some(upstream) = &caddy.reverse_proxy {
-        site = site.reverse_proxy(upstream);
+        site = site.reverse_proxy(&upstream.to_string());
     }
 
     if caddy.gzip {
@@ -39,9 +39,9 @@ pub fn render(caddy: &Caddy, domain: &str) -> String {
 /// Routes with a path pattern get `handle <path> { ... }`.
 /// A route with an empty path becomes a bare `handle { ... }`
 /// (catch-all).
-fn add_route_handles(mut site: SiteBlock, routes: &[(String, String)]) -> SiteBlock {
+fn add_route_handles(mut site: SiteBlock, routes: &[(String, crate::app::Upstream)]) -> SiteBlock {
     for (path, upstream) in routes {
-        let inner = vec![Directive::new("reverse_proxy").arg(upstream)];
+        let inner = vec![Directive::new("reverse_proxy").arg(&upstream.to_string())];
         let mut handle = Directive::new("handle");
         if !path.is_empty() {
             handle = handle.matcher(Matcher::Path(path.clone()));

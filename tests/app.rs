@@ -92,10 +92,10 @@ fn upstream_port_selects_specific_port() {
 }
 
 #[test]
-fn upstream_into_string() {
+fn upstream_to_string() {
     let app = App::new("svc").expose(5000);
 
-    let s: String = app.upstream().into();
+    let s = app.upstream().to_string();
 
     assert_eq!(s, "svc:5000");
 }

@@ -1,3 +1,5 @@
+use crate::app::Upstream;
+
 /// Configuration for the Caddy reverse proxy container.
 ///
 /// # Example
@@ -20,12 +22,12 @@
 #[derive(Debug, Clone, Default)]
 pub struct Caddy {
     pub basic_auth: Option<(String, String)>,
-    pub reverse_proxy: Option<String>,
+    pub reverse_proxy: Option<Upstream>,
     /// Path-based routes for multi-service setups.
     /// Each entry is `(path_pattern, upstream)`.
     /// When non-empty, these are rendered as Caddy `handle`
     /// blocks instead of a single `reverse_proxy`.
-    pub routes: Vec<(String, String)>,
+    pub routes: Vec<(String, Upstream)>,
     pub gzip: bool,
     pub security_headers: bool,
     pub extra_directives: Vec<String>,
@@ -47,8 +49,8 @@ impl Caddy {
     }
 
     #[must_use]
-    pub fn reverse_proxy(mut self, upstream: impl Into<String>) -> Self {
-        self.reverse_proxy = Some(upstream.into());
+    pub fn reverse_proxy(mut self, upstream: Upstream) -> Self {
+        self.reverse_proxy = Some(upstream);
         self
     }
 
@@ -69,8 +71,8 @@ impl Caddy {
     /// Use `/*` suffix for prefix matching. The last route
     /// without a path matcher becomes the catch-all `handle`.
     #[must_use]
-    pub fn route(mut self, path: &str, upstream: impl Into<String>) -> Self {
-        self.routes.push((path.to_string(), upstream.into()));
+    pub fn route(mut self, path: &str, upstream: Upstream) -> Self {
+        self.routes.push((path.to_string(), upstream));
         self
     }
 

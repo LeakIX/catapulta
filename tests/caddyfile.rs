@@ -1,12 +1,13 @@
 use caddyfile_rs::{Caddyfile, SiteBlock, format, parse, tokenize};
-use catapulta::Caddy;
 use catapulta::caddyfile;
+use catapulta::{App, Caddy};
 
 #[test]
 fn full_caddyfile() {
+    let app = App::new("app").expose(3000);
     let caddy = Caddy::new()
         .basic_auth("admin", "$2a$14$hash")
-        .reverse_proxy("app:3000")
+        .reverse_proxy(app.upstream())
         .gzip()
         .security_headers();
 
@@ -22,7 +23,8 @@ fn full_caddyfile() {
 
 #[test]
 fn minimal_caddyfile() {
-    let caddy = Caddy::new().reverse_proxy("backend:8080");
+    let backend = App::new("backend").expose(8080);
+    let caddy = Caddy::new().reverse_proxy(backend.upstream());
 
     let result = caddyfile::render(&caddy, "test.dev");
 
@@ -34,8 +36,9 @@ fn minimal_caddyfile() {
 
 #[test]
 fn extra_directives() {
+    let app = App::new("app").expose(3000);
     let caddy = Caddy::new()
-        .reverse_proxy("app:3000")
+        .reverse_proxy(app.upstream())
         .directive("log")
         .directive("tls internal");
 
@@ -132,9 +135,11 @@ fn builder_roundtrip() {
 
 #[test]
 fn route_based_handle_blocks() {
+    let api = App::new("api").expose(8000);
+    let web = App::new("web").expose(3000);
     let caddy = Caddy::new()
-        .route("/api/*", "api:8000")
-        .route("", "web:3000");
+        .route("/api/*", api.upstream())
+        .route("", web.upstream());
 
     let result = caddyfile::render(&caddy, "example.com");
 
@@ -148,10 +153,13 @@ fn route_based_handle_blocks() {
 #[test]
 fn routes_override_reverse_proxy() {
     // When routes are set, reverse_proxy is ignored
+    let ignored = App::new("ignored").expose(9999);
+    let api = App::new("api").expose(8000);
+    let web = App::new("web").expose(3000);
     let caddy = Caddy::new()
-        .reverse_proxy("ignored:9999")
-        .route("/api/*", "api:8000")
-        .route("", "web:3000");
+        .reverse_proxy(ignored.upstream())
+        .route("/api/*", api.upstream())
+        .route("", web.upstream());
 
     let result = caddyfile::render(&caddy, "example.com");
 
@@ -162,9 +170,11 @@ fn routes_override_reverse_proxy() {
 
 #[test]
 fn routes_with_gzip_and_headers() {
+    let api = App::new("api").expose(8000);
+    let web = App::new("web").expose(3000);
     let caddy = Caddy::new()
-        .route("/api/*", "api:8000")
-        .route("", "web:3000")
+        .route("/api/*", api.upstream())
+        .route("", web.upstream())
         .gzip()
         .security_headers();
 
@@ -176,9 +186,9 @@ fn routes_with_gzip_and_headers() {
 }
 
 #[test]
-fn single_reverse_proxy_backwards_compat() {
-    // Old-style single upstream still works
-    let caddy = Caddy::new().reverse_proxy("app:3000").gzip();
+fn single_reverse_proxy_with_upstream() {
+    let app = App::new("app").expose(3000);
+    let caddy = Caddy::new().reverse_proxy(app.upstream()).gzip();
 
     let result = caddyfile::render(&caddy, "example.com");
 

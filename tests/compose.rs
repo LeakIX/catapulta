@@ -12,7 +12,7 @@ fn generates_valid_compose() {
         .expose(3000);
 
     let caddy = Caddy::new()
-        .reverse_proxy("myapp:3000")
+        .reverse_proxy(app.upstream())
         .gzip()
         .security_headers();
 
@@ -133,7 +133,7 @@ fn multiple_volumes() {
 #[test]
 fn caddy_depends_on_app() {
     let app = App::new("webapp").expose(3000);
-    let caddy = Caddy::new().reverse_proxy("webapp:3000");
+    let caddy = Caddy::new().reverse_proxy(app.upstream());
 
     let result = compose::render(&[app], &caddy);
 
@@ -163,7 +163,7 @@ fn round_trip_parse() {
         .expose(3000);
 
     let caddy = Caddy::new()
-        .reverse_proxy("roundtrip:3000")
+        .reverse_proxy(app.upstream())
         .gzip()
         .security_headers();
 
@@ -189,8 +189,8 @@ fn multi_app_compose() {
         .expose(3000);
 
     let caddy = Caddy::new()
-        .route("/api/*", "api:8000")
-        .route("", "web:3000");
+        .route("/api/*", api.upstream())
+        .route("", web.upstream());
 
     let result = compose::render(&[api, web], &caddy);
 
@@ -217,8 +217,8 @@ fn multi_app_shared_network() {
     let web = App::new("web").expose(3000);
 
     let caddy = Caddy::new()
-        .route("/api/*", "api:8000")
-        .route("", "web:3000");
+        .route("/api/*", api.upstream())
+        .route("", web.upstream());
 
     let yaml = compose::render(&[api, web], &caddy);
     let parsed: Compose = serde_yaml::from_str(&yaml).expect("parse");
@@ -235,12 +235,12 @@ fn multi_app_shared_network() {
 
 #[test]
 fn multi_app_volumes_from_all_apps() {
-    let api = App::new("api").volume("api-data", "/data");
-    let web = App::new("web").volume("web-assets", "/assets");
+    let api = App::new("api").volume("api-data", "/data").expose(8000);
+    let web = App::new("web").volume("web-assets", "/assets").expose(3000);
 
     let caddy = Caddy::new()
-        .route("/api/*", "api:8000")
-        .route("", "web:3000");
+        .route("/api/*", api.upstream())
+        .route("", web.upstream());
 
     let yaml = compose::render(&[api, web], &caddy);
     let parsed: Compose = serde_yaml::from_str(&yaml).expect("parse");
@@ -255,7 +255,7 @@ fn multi_app_volumes_from_all_apps() {
 fn caddy_custom_volumes_in_service() {
     let app = App::new("spa").expose(3000);
     let caddy = Caddy::new()
-        .reverse_proxy("spa:3000")
+        .reverse_proxy(app.upstream())
         .volume("./web-static", "/www:ro")
         .volume("caddy-certs", "/certs");
 
@@ -273,7 +273,7 @@ fn caddy_custom_volumes_in_service() {
 fn caddy_named_volume_registered_at_top_level() {
     let app = App::new("spa").expose(3000);
     let caddy = Caddy::new()
-        .reverse_proxy("spa:3000")
+        .reverse_proxy(app.upstream())
         .volume("caddy-certs", "/certs");
 
     let yaml = compose::render(&[app], &caddy);
@@ -286,7 +286,7 @@ fn caddy_named_volume_registered_at_top_level() {
 fn caddy_bind_mount_not_in_top_level_volumes() {
     let app = App::new("spa").expose(3000);
     let caddy = Caddy::new()
-        .reverse_proxy("spa:3000")
+        .reverse_proxy(app.upstream())
         .volume("./web-static", "/www:ro")
         .volume("/host/path", "/container:ro");
 

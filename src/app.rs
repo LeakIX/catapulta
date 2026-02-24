@@ -28,12 +28,6 @@ impl fmt::Display for Upstream {
     }
 }
 
-impl From<Upstream> for String {
-    fn from(u: Upstream) -> Self {
-        u.to_string()
-    }
-}
-
 /// Defines the application container: image, environment,
 /// volumes, health checks, and exposed ports.
 ///
