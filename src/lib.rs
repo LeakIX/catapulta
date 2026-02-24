@@ -1,7 +1,7 @@
 //! Declarative deployment DSL for Rust.
 //!
 //! Catapulta lets you provision cloud servers, configure DNS, and
-//! deploy Docker containers — all from a typed Rust DSL. No YAML,
+//! deploy Docker containers - all from a typed Rust DSL. No YAML,
 //! no shell scripts, no manual SSH.
 //!
 //! The name comes from Portuguese for *catapult*: launch your
@@ -71,10 +71,10 @@
 //!
 //! The pipeline follows a three-phase model:
 //!
-//! 1. **Provision** — create a VPS, install Docker, configure
+//! 1. **Provision** - create a VPS, install Docker, configure
 //!    firewall, set up SSH
-//! 2. **DNS** — create or update A records pointing to the server
-//! 3. **Deploy** — build the image, transfer it, generate
+//! 2. **DNS** - create or update A records pointing to the server
+//! 3. **Deploy** - build the image, transfer it, generate
 //!    `docker-compose.yml` and `Caddyfile`, start containers
 //!
 //! Each phase is pluggable via traits ([`Provisioner`],

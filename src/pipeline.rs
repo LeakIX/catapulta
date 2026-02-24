@@ -2,10 +2,13 @@ use clap::{Parser, Subcommand};
 
 use crate::app::App;
 use crate::caddy::Caddy;
+use crate::caddyfile;
+use crate::compose;
 use crate::deploy::Deployer;
 use crate::dns::DnsProvider;
 use crate::error::{DeployError, DeployResult};
 use crate::provision::Provisioner;
+use crate::ssh::SshSession;
 
 /// Deployment pipeline orchestrating provisioning, DNS, and
 /// deployment.
@@ -78,7 +81,12 @@ impl Pipeline {
                 domain,
                 region,
             } => self.cmd_provision(name, domain.as_deref(), region.as_deref()),
-            Command::Deploy { host, skip_build } => self.cmd_deploy(host, *skip_build),
+            Command::Deploy {
+                host,
+                skip_build,
+                dry_run,
+            } => self.cmd_deploy(host, *skip_build, *dry_run),
+            Command::Status { host } => self.cmd_status(host),
             Command::Destroy { name, domain } => self.cmd_destroy(name, domain.as_deref()),
         }
     }
@@ -129,11 +137,22 @@ impl Pipeline {
         Ok(())
     }
 
-    fn cmd_deploy(&self, host: &str, skip_build: bool) -> DeployResult<()> {
+    fn cmd_deploy(
+        &self,
+        host: &str,
+        skip_build: bool,
+        dry_run: bool,
+    ) -> DeployResult<()> {
+        if dry_run {
+            return self.cmd_deploy_dry_run(host);
+        }
+
         let deployer = self
             .deployer
             .as_ref()
-            .ok_or_else(|| DeployError::Other("no deployer configured".into()))?;
+            .ok_or_else(|| {
+                DeployError::Other("no deployer configured".into())
+            })?;
 
         if !skip_build {
             deployer.build_image(&self.app)?;
@@ -150,6 +169,51 @@ impl Pipeline {
         )?;
 
         Ok(())
+    }
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn cmd_deploy_dry_run(&self, host: &str) -> DeployResult<()> {
+        let compose_content = compose::render(&self.app, &self.caddy);
+        let caddyfile_content = caddyfile::render(&self.caddy, host);
+
+        eprintln!("=== Dry run: no changes will be made ===");
+        eprintln!();
+
+        eprintln!("--- docker-compose.yml ---");
+        println!("{compose_content}");
+
+        eprintln!("--- Caddyfile ---");
+        println!("{caddyfile_content}");
+
+        eprintln!("--- Actions that would be performed ---");
+        eprintln!(
+            "1. Build Docker image: {}:latest",
+            self.app.name
+        );
+        eprintln!(
+            "2. Transfer image to {}@{}",
+            self.ssh_user, host
+        );
+        eprintln!(
+            "3. Write config files to {}/",
+            self.remote_dir
+        );
+        if self.app.env_file.is_some() {
+            eprintln!("4. Transfer .env file");
+            eprintln!("5. Restart containers via docker compose");
+        } else {
+            eprintln!("4. Restart containers via docker compose");
+        }
+
+        Ok(())
+    }
+
+    fn cmd_status(&self, host: &str) -> DeployResult<()> {
+        let ssh = SshSession::new(host, &self.ssh_user);
+        ssh.exec_interactive(&format!(
+            "cd {} && docker compose ps",
+            self.remote_dir
+        ))
     }
 
     fn cmd_destroy(&self, name: &str, domain: Option<&str>) -> DeployResult<()> {
@@ -226,6 +290,16 @@ enum Command {
         /// Skip Docker image build
         #[arg(long)]
         skip_build: bool,
+
+        /// Preview generated files without executing
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Show container status on a remote server
+    Status {
+        /// Hostname or IP address
+        host: String,
     },
 
     /// Destroy a server

@@ -255,7 +255,7 @@ impl Provisioner for DigitalOcean {
         eprintln!("Droplet created! IP: {ip}");
 
         // We need to find the SSH key file again for the
-        // ServerInfo — detect_ssh_key provides both id and
+        // ServerInfo - detect_ssh_key provides both id and
         // file.
         let (_, key_file) = Self::detect_ssh_key()?;
 

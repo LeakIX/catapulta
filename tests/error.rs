@@ -43,6 +43,15 @@ fn display_file_not_found() {
 }
 
 #[test]
+fn display_healthcheck_timeout() {
+    let err = DeployError::HealthcheckTimeout("my-app".into(), 30);
+    assert_eq!(
+        err.to_string(),
+        "container 'my-app' did not become healthy after 30 attempts"
+    );
+}
+
+#[test]
 fn display_other() {
     let err = DeployError::Other("custom error".into());
     assert_eq!(err.to_string(), "custom error");

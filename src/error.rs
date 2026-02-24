@@ -28,6 +28,11 @@ pub enum DeployError {
     #[error("file not found: {0}")]
     FileNotFound(String),
 
+    #[error(
+        "container '{0}' did not become healthy after {1} attempts"
+    )]
+    HealthcheckTimeout(String, u32),
+
     #[error("{0}")]
     Other(String),
 

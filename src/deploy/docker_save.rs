@@ -1,4 +1,6 @@
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
 use crate::app::App;
 use crate::caddy::Caddy;
@@ -11,7 +13,7 @@ use crate::ssh::SshSession;
 
 /// Deploy via `docker save | gzip | ssh | docker load`.
 ///
-/// This is the simplest deployment strategy — no registry
+/// This is the simplest deployment strategy - no registry
 /// needed. The image is built locally for linux/amd64,
 /// streamed over SSH, then started with docker compose.
 pub struct DockerSaveLoad;
@@ -140,11 +142,12 @@ impl Deployer for DockerSaveLoad {
         ))?;
 
         // Wait for health
-        eprintln!("Waiting for service to be healthy...");
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        wait_healthy(&ssh, app, remote_dir)?;
 
         // Show status
-        ssh.exec_interactive(&format!("cd {remote_dir} && docker compose ps"))?;
+        ssh.exec_interactive(
+            &format!("cd {remote_dir} && docker compose ps"),
+        )?;
 
         eprintln!();
         eprintln!("Deployment complete!");
@@ -152,4 +155,62 @@ impl Deployer for DockerSaveLoad {
 
         Ok(())
     }
+}
+
+/// Poll container health status instead of sleeping a fixed
+/// duration. When the app has a healthcheck configured, queries
+/// `docker inspect` in a loop. Falls back to a brief sleep when
+/// no healthcheck is defined.
+fn wait_healthy(
+    ssh: &SshSession,
+    app: &App,
+    remote_dir: &str,
+) -> DeployResult<()> {
+    const MAX_ATTEMPTS: u32 = 30;
+    const INTERVAL: Duration = Duration::from_secs(5);
+
+    if app.healthcheck.is_none() {
+        eprintln!("No healthcheck configured, waiting 5s...");
+        thread::sleep(Duration::from_secs(5));
+        return Ok(());
+    }
+
+    eprintln!("Waiting for container to be healthy...");
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        let output = ssh.exec(&format!(
+            "cd {remote_dir} && \
+             docker inspect \
+             --format='{{{{.State.Health.Status}}}}' {}",
+            app.name
+        ));
+
+        match output {
+            Ok(status) => {
+                let status = status.trim();
+                eprint!(
+                    "  Health check ({attempt}/{MAX_ATTEMPTS}): \
+                     {status}"
+                );
+                if status == "healthy" {
+                    eprintln!();
+                    return Ok(());
+                }
+                eprintln!(" - retrying...");
+            }
+            Err(_) => {
+                eprintln!(
+                    "  Health check ({attempt}/{MAX_ATTEMPTS}): \
+                     waiting for container..."
+                );
+            }
+        }
+
+        thread::sleep(INTERVAL);
+    }
+
+    Err(DeployError::HealthcheckTimeout(
+        app.name.clone(),
+        MAX_ATTEMPTS,
+    ))
 }
