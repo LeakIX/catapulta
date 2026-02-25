@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 - `App::port(host, container)` builder for host-to-container port mapping
   (docker-compose `ports`), complementing `expose()` which only exposes
   within the Docker network ([893d9b9], [#8])
+- `--force` flag on `destroy` command to skip interactive confirmation
+  prompt for CI/CD and scripted workflows ([e883ebe], [#10])
 
 ### Fixed
 
@@ -107,6 +109,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[e883ebe]: https://github.com/LeakIX/catapulta/commit/e883ebe
 [af6dc66]: https://github.com/LeakIX/catapulta/commit/af6dc66
 [893d9b9]: https://github.com/LeakIX/catapulta/commit/893d9b9
 [1ea20e5]: https://github.com/LeakIX/catapulta/commit/1ea20e5
@@ -125,6 +128,7 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#10]: https://github.com/LeakIX/catapulta/issues/10
 [#9]: https://github.com/LeakIX/catapulta/issues/9
 [#8]: https://github.com/LeakIX/catapulta/issues/8
 [#7]: https://github.com/LeakIX/catapulta/issues/7
