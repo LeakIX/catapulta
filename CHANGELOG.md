@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `App::context()` builder method to override the Docker build context
+  directory, allowing Dockerfiles in subdirectories to use relative paths
+  ([15f4687], [#12])
+
 ### Changed
 
 - Replace curl shell-out with official `cloudflare` crate (v0.14) for
@@ -117,6 +123,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[15f4687]: https://github.com/LeakIX/catapulta/commit/15f4687
 [5611350]: https://github.com/LeakIX/catapulta/commit/5611350
 [e883ebe]: https://github.com/LeakIX/catapulta/commit/e883ebe
 [af6dc66]: https://github.com/LeakIX/catapulta/commit/af6dc66
@@ -137,6 +144,7 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#12]: https://github.com/LeakIX/catapulta/issues/12
 [#11]: https://github.com/LeakIX/catapulta/issues/11
 [#10]: https://github.com/LeakIX/catapulta/issues/10
 [#9]: https://github.com/LeakIX/catapulta/issues/9
