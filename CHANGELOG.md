@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `App::port(host, container)` builder for host-to-container port mapping
+  (docker-compose `ports`), complementing `expose()` which only exposes
+  within the Docker network ([893d9b9], [#8])
+
 ### Changed
 
 - **BREAKING**: `Caddy::reverse_proxy()` and `Caddy::route()` now require
@@ -96,6 +102,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[893d9b9]: https://github.com/LeakIX/catapulta/commit/893d9b9
 [1ea20e5]: https://github.com/LeakIX/catapulta/commit/1ea20e5
 [ca10728]: https://github.com/LeakIX/catapulta/commit/ca10728
 [5d27688]: https://github.com/LeakIX/catapulta/commit/5d27688
@@ -112,6 +119,7 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#8]: https://github.com/LeakIX/catapulta/issues/8
 [#7]: https://github.com/LeakIX/catapulta/issues/7
 [#6]: https://github.com/LeakIX/catapulta/issues/6
 [#5]: https://github.com/LeakIX/catapulta/issues/5
