@@ -103,7 +103,11 @@ impl Pipeline {
                 dry_run,
             } => self.cmd_deploy(host, *skip_build, *dry_run),
             Command::Status { host } => self.cmd_status(host),
-            Command::Destroy { name, domain } => self.cmd_destroy(name, domain.as_deref()),
+            Command::Destroy {
+                name,
+                domain,
+                force,
+            } => self.cmd_destroy(name, domain.as_deref(), *force),
         }
     }
 
@@ -229,7 +233,7 @@ impl Pipeline {
         ssh.exec_interactive(&format!("cd {} && docker compose ps", self.remote_dir))
     }
 
-    fn cmd_destroy(&self, name: &str, domain: Option<&str>) -> DeployResult<()> {
+    fn cmd_destroy(&self, name: &str, domain: Option<&str>, force: bool) -> DeployResult<()> {
         let provisioner = self
             .provisioner
             .as_ref()
@@ -247,13 +251,15 @@ impl Pipeline {
         }
         eprintln!();
 
-        // Ask for confirmation
-        eprint!("Are you sure? Type 'yes' to confirm: ");
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        if input.trim() != "yes" {
-            eprintln!("Aborted.");
-            return Ok(());
+        if !force {
+            // Ask for confirmation
+            eprint!("Are you sure? Type 'yes' to confirm: ");
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            if input.trim() != "yes" {
+                eprintln!("Aborted.");
+                return Ok(());
+            }
         }
 
         provisioner.destroy_server(name)?;
@@ -326,5 +332,9 @@ enum Command {
         /// Domain record to remove
         #[arg(long)]
         domain: Option<String>,
+
+        /// Skip interactive confirmation prompt
+        #[arg(long)]
+        force: bool,
     },
 }
