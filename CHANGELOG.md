@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-02-25
+
 ### Added
 
 - `App::context()` builder method to override the Docker build context
@@ -155,6 +157,7 @@ All notable changes to this project will be documented in this file.
 [#4]: https://github.com/LeakIX/catapulta/issues/4
 
 <!-- Release links -->
+[0.5.0]: https://github.com/LeakIX/catapulta/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/LeakIX/catapulta/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/LeakIX/catapulta/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/LeakIX/catapulta/compare/v0.1.0...v0.2.0
