@@ -41,9 +41,21 @@ pub fn render(apps: &[App], caddy: &Caddy) -> String {
 }
 
 fn caddy_service(apps: &[App], caddy: &Caddy, network_name: &str) -> Service {
+    let mut proxied_names: Vec<&str> = Vec::new();
+    if let Some(ref up) = caddy.reverse_proxy {
+        proxied_names.push(&up.name);
+    }
+    for (_, up) in &caddy.routes {
+        if !proxied_names.contains(&up.name.as_str()) {
+            proxied_names.push(&up.name);
+        }
+    }
+
     let mut depends = IndexMap::new();
     for app in apps {
-        depends.insert(app.name.clone(), DependsCondition::service_healthy());
+        if proxied_names.contains(&app.name.as_str()) {
+            depends.insert(app.name.clone(), DependsCondition::service_healthy());
+        }
     }
 
     let mut volumes = vec![

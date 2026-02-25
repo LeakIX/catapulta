@@ -254,6 +254,60 @@ fn port_mapping_round_trip() {
 // --- Multi-app tests ---
 
 #[test]
+fn caddy_only_depends_on_proxied_apps() {
+    let nats = App::new("nats").expose(4222);
+    let webhook = App::new("webhook")
+        .healthcheck("curl -f http://localhost:8090/health")
+        .expose(8090);
+    let agent = App::new("agent");
+
+    let caddy = Caddy::new().reverse_proxy(webhook.upstream());
+
+    let yaml = compose::render(&[nats, webhook, agent], &caddy);
+    let parsed: Compose = serde_yaml::from_str(&yaml).expect("parse");
+
+    let caddy_svc = parsed.services.0.get("caddy").unwrap();
+    let caddy_svc = caddy_svc.as_ref().unwrap();
+    match &caddy_svc.depends_on {
+        docker_compose_types::DependsOnOptions::Conditional(deps) => {
+            assert!(deps.contains_key("webhook"));
+            assert!(!deps.contains_key("nats"));
+            assert!(!deps.contains_key("agent"));
+        }
+        _ => panic!("expected conditional depends_on"),
+    }
+}
+
+#[test]
+fn caddy_depends_on_all_routed_apps_only() {
+    let api = App::new("api")
+        .healthcheck("curl -f http://localhost:8000/health")
+        .expose(8000);
+    let web = App::new("web")
+        .healthcheck("curl -f http://localhost:3000/")
+        .expose(3000);
+    let worker = App::new("worker");
+
+    let caddy = Caddy::new()
+        .route("/api/*", api.upstream())
+        .route("", web.upstream());
+
+    let yaml = compose::render(&[api, web, worker], &caddy);
+    let parsed: Compose = serde_yaml::from_str(&yaml).expect("parse");
+
+    let caddy_svc = parsed.services.0.get("caddy").unwrap();
+    let caddy_svc = caddy_svc.as_ref().unwrap();
+    match &caddy_svc.depends_on {
+        docker_compose_types::DependsOnOptions::Conditional(deps) => {
+            assert!(deps.contains_key("api"));
+            assert!(deps.contains_key("web"));
+            assert!(!deps.contains_key("worker"));
+        }
+        _ => panic!("expected conditional depends_on"),
+    }
+}
+
+#[test]
 fn multi_app_compose() {
     let api = App::new("api")
         .healthcheck("curl -f http://localhost:8000/health")
