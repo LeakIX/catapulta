@@ -27,6 +27,8 @@ serde_json = "1.0"
 serde_yaml = "0.9"
 thiserror = "2.0"
 anyhow = "1.0"
+cloudflare = "0.14"
+tokio = { version = "1.44", features = ["rt"] }
 
 [dev-dependencies]
 caddyfile-rs = "0.1"
