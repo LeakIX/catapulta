@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-02-25
+
+### Added
+
+- `App::source()` builder method to clone a remote Git repository as the
+  Docker build source, enabling deployment of projects without pre-built
+  images ([f7394c3], [#13])
+- `App::cache_source()` builder to opt-in to caching cloned repositories
+  between builds ([f7394c3], [#13])
+- Integration test that builds `ms-waitlist-notifier` from GitHub, gated
+  behind the `integration` cargo feature ([f7394c3], [#13])
+- CI job for integration tests with Docker ([f7394c3], [#13])
+- Documentation example for remote Git source builds ([f7394c3], [#13])
+
 ## [0.5.0] - 2026-02-25
 
 ### Added
@@ -125,6 +139,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[f7394c3]: https://github.com/LeakIX/catapulta/commit/f7394c3
 [15f4687]: https://github.com/LeakIX/catapulta/commit/15f4687
 [5611350]: https://github.com/LeakIX/catapulta/commit/5611350
 [e883ebe]: https://github.com/LeakIX/catapulta/commit/e883ebe
@@ -146,6 +161,7 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#13]: https://github.com/LeakIX/catapulta/issues/13
 [#12]: https://github.com/LeakIX/catapulta/issues/12
 [#11]: https://github.com/LeakIX/catapulta/issues/11
 [#10]: https://github.com/LeakIX/catapulta/issues/10
@@ -157,6 +173,7 @@ All notable changes to this project will be documented in this file.
 [#4]: https://github.com/LeakIX/catapulta/issues/4
 
 <!-- Release links -->
+[0.6.0]: https://github.com/LeakIX/catapulta/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/LeakIX/catapulta/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/LeakIX/catapulta/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/LeakIX/catapulta/compare/v0.2.0...v0.3.0
