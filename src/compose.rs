@@ -104,11 +104,23 @@ fn app_service(app: &App, network_name: &str) -> Service {
         ..Default::default()
     });
 
+    let ports = if app.ports.is_empty() {
+        Ports::default()
+    } else {
+        Ports::Short(
+            app.ports
+                .iter()
+                .map(|(host, container)| format!("{host}:{container}"))
+                .collect(),
+        )
+    };
+
     Service {
         image: Some(format!("{}:latest", app.name)),
         container_name: Some(app.name.clone()),
         restart: Some("unless-stopped".to_string()),
         expose,
+        ports,
         env_file,
         environment,
         volumes,

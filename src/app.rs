@@ -42,10 +42,12 @@ impl fmt::Display for Upstream {
 ///     .env("SERVER_PORT", "3000")
 ///     .volume("app-data", "/app/data")
 ///     .healthcheck("curl -f http://localhost:3000/")
-///     .expose(3000);
+///     .expose(3000)
+///     .port(4222, 4222);
 ///
 /// assert_eq!(app.name, "my-service");
 /// assert_eq!(app.expose, vec![3000]);
+/// assert_eq!(app.ports, vec![(4222, 4222)]);
 /// ```
 #[derive(Debug, Clone)]
 pub struct App {
@@ -57,6 +59,7 @@ pub struct App {
     pub env_file: Option<String>,
     pub volumes: Vec<(String, String)>,
     pub expose: Vec<u16>,
+    pub ports: Vec<(u16, u16)>,
     pub healthcheck: Option<String>,
 }
 
@@ -72,6 +75,7 @@ impl App {
             env_file: None,
             volumes: Vec::new(),
             expose: Vec::new(),
+            ports: Vec::new(),
             healthcheck: None,
         }
     }
@@ -115,6 +119,17 @@ impl App {
     #[must_use]
     pub fn expose(mut self, port: u16) -> Self {
         self.expose.push(port);
+        self
+    }
+
+    /// Map a host port to a container port.
+    ///
+    /// This renders as `"host:container"` under the `ports` key in
+    /// docker-compose, making the port accessible from outside the
+    /// Docker network.
+    #[must_use]
+    pub fn port(mut self, host: u16, container: u16) -> Self {
+        self.ports.push((host, container));
         self
     }
 

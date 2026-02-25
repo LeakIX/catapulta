@@ -177,6 +177,80 @@ fn round_trip_parse() {
     assert!(parsed.networks.0.contains_key("roundtrip-network"));
 }
 
+// --- Host port mapping tests ---
+
+#[test]
+fn port_mapping_in_compose() {
+    let app = App::new("nats").expose(4222).port(4222, 4222);
+    let caddy = Caddy::new();
+
+    let result = compose::render(&[app], &caddy);
+
+    assert!(result.contains("ports:"));
+    assert!(result.contains("4222:4222"));
+    // expose is still present separately
+    assert!(result.contains("expose:"));
+}
+
+#[test]
+fn multiple_port_mappings() {
+    let app = App::new("nats").port(4222, 4222).port(8222, 8222);
+    let caddy = Caddy::new();
+
+    let result = compose::render(&[app], &caddy);
+
+    assert!(result.contains("4222:4222"));
+    assert!(result.contains("8222:8222"));
+}
+
+#[test]
+fn different_host_and_container_ports() {
+    let app = App::new("db").port(15432, 5432);
+    let caddy = Caddy::new();
+
+    let result = compose::render(&[app], &caddy);
+
+    assert!(result.contains("15432:5432"));
+}
+
+#[test]
+fn no_ports_when_unset() {
+    let app = App::new("internal").expose(3000);
+    let caddy = Caddy::new();
+
+    let result = compose::render(&[app], &caddy);
+
+    // Should not have a ports key for the app service
+    // (Caddy would have ports, but there's no Caddy here)
+    let parsed: Compose = serde_yaml::from_str(&result).expect("parse");
+    let svc = parsed.services.0.get("internal").unwrap();
+    let svc = svc.as_ref().unwrap();
+    assert!(matches!(svc.ports, docker_compose_types::Ports::Short(ref v) if v.is_empty()));
+}
+
+#[test]
+fn port_mapping_round_trip() {
+    let app = App::new("nats")
+        .expose(4222)
+        .port(4222, 4222)
+        .port(8222, 8222);
+    let caddy = Caddy::new();
+
+    let yaml = compose::render(&[app], &caddy);
+    let parsed: Compose = serde_yaml::from_str(&yaml).expect("round-trip parse");
+
+    let svc = parsed.services.0.get("nats").unwrap();
+    let svc = svc.as_ref().unwrap();
+    match &svc.ports {
+        docker_compose_types::Ports::Short(v) => {
+            assert_eq!(v.len(), 2);
+            assert!(v.contains(&"4222:4222".to_string()));
+            assert!(v.contains(&"8222:8222".to_string()));
+        }
+        _ => panic!("expected short ports format"),
+    }
+}
+
 // --- Multi-app tests ---
 
 #[test]
