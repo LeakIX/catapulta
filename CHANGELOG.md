@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Replace curl shell-out with official `cloudflare` crate (v0.14) for
+  Cloudflare DNS provider, removing external curl dependency and adding
+  typed API calls with proper error handling ([5611350], [#11])
+
 ## [0.4.0] - 2026-02-25
 
 ### Added
@@ -111,6 +117,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[5611350]: https://github.com/LeakIX/catapulta/commit/5611350
 [e883ebe]: https://github.com/LeakIX/catapulta/commit/e883ebe
 [af6dc66]: https://github.com/LeakIX/catapulta/commit/af6dc66
 [893d9b9]: https://github.com/LeakIX/catapulta/commit/893d9b9
@@ -130,6 +137,7 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#11]: https://github.com/LeakIX/catapulta/issues/11
 [#10]: https://github.com/LeakIX/catapulta/issues/10
 [#9]: https://github.com/LeakIX/catapulta/issues/9
 [#8]: https://github.com/LeakIX/catapulta/issues/8
