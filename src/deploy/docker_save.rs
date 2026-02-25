@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
@@ -51,7 +51,26 @@ impl Deployer for DockerSaveLoad {
     fn build_image(&self, app: &App) -> DeployResult<()> {
         eprintln!("Building Docker image for {}...", app.platform);
 
-        let mut args = vec!["build", "--platform", &app.platform, "-f", &app.dockerfile];
+        let source_dir = prepare_source(app)?;
+
+        let base = source_dir
+            .as_deref()
+            .map(|p| p.to_string_lossy().into_owned());
+
+        let context = match (&base, &app.context) {
+            (Some(b), Some(sub)) => format!("{b}/{sub}"),
+            (Some(b), None) => b.clone(),
+            (None, Some(ctx)) => ctx.clone(),
+            (None, None) => ".".to_string(),
+        };
+
+        let dockerfile = if source_dir.is_some() {
+            format!("{context}/{}", app.dockerfile)
+        } else {
+            app.dockerfile.clone()
+        };
+
+        let mut args = vec!["build", "--platform", &app.platform, "-f", &dockerfile];
 
         let build_arg_strings: Vec<String> = app
             .build_args
@@ -67,9 +86,17 @@ impl Deployer for DockerSaveLoad {
         let tag = format!("{}:latest", app.name);
         args.push("-t");
         args.push(&tag);
-        args.push(app.context.as_deref().unwrap_or("."));
+        args.push(&context);
 
-        cmd::run_interactive("docker", &args)
+        let result = cmd::run_interactive("docker", &args);
+
+        if !app.cache_source {
+            if let Some(dir) = &source_dir {
+                cleanup_source(dir);
+            }
+        }
+
+        result
     }
 
     fn transfer_image(&self, app: &App, host: &str, user: &str) -> DeployResult<()> {
@@ -167,6 +194,54 @@ impl Deployer for DockerSaveLoad {
         eprintln!("Application available at: https://{host}");
 
         Ok(())
+    }
+}
+
+/// Clone a remote Git repository for use as Docker build context.
+///
+/// Returns `Some(PathBuf)` to the cloned directory when
+/// `app.source` is set, or `None` for local builds.
+fn prepare_source(app: &App) -> DeployResult<Option<PathBuf>> {
+    let Some((url, git_ref)) = &app.source else {
+        return Ok(None);
+    };
+
+    if app.cache_source {
+        let dir = std::env::temp_dir().join(format!("catapulta-src-{}", app.name));
+        let dir_str = dir.to_string_lossy().to_string();
+
+        if dir.exists() {
+            eprintln!("Updating cached source for {}...", app.name);
+            cmd::run("git", &["-C", &dir_str, "fetch", "origin"])?;
+            cmd::run("git", &["-C", &dir_str, "checkout", git_ref])?;
+        } else {
+            eprintln!("Cloning source for {} (cached)...", app.name);
+            cmd::run(
+                "git",
+                &["clone", "--depth", "1", "--branch", git_ref, url, &dir_str],
+            )?;
+        }
+
+        Ok(Some(dir))
+    } else {
+        let pid = std::process::id();
+        let dir = std::env::temp_dir().join(format!("catapulta-src-{}-{pid}", app.name));
+        let dir_str = dir.to_string_lossy().to_string();
+
+        eprintln!("Cloning source for {}...", app.name);
+        cmd::run(
+            "git",
+            &["clone", "--depth", "1", "--branch", git_ref, url, &dir_str],
+        )?;
+
+        Ok(Some(dir))
+    }
+}
+
+/// Remove a non-cached source directory.
+fn cleanup_source(dir: &Path) {
+    if let Err(e) = std::fs::remove_dir_all(dir) {
+        eprintln!("Warning: failed to clean up {}: {e}", dir.display());
     }
 }
 

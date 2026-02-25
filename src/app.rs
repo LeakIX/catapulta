@@ -62,6 +62,8 @@ pub struct App {
     pub ports: Vec<(u16, u16)>,
     pub healthcheck: Option<String>,
     pub context: Option<String>,
+    pub source: Option<(String, String)>,
+    pub cache_source: bool,
 }
 
 impl App {
@@ -79,6 +81,8 @@ impl App {
             ports: Vec::new(),
             healthcheck: None,
             context: None,
+            source: None,
+            cache_source: false,
         }
     }
 
@@ -138,6 +142,37 @@ impl App {
     #[must_use]
     pub fn context(mut self, path: &str) -> Self {
         self.context = Some(path.to_string());
+        self
+    }
+
+    /// Clone a remote Git repository as the Docker build source.
+    ///
+    /// The `ssh_url` must be an SSH URL
+    /// (e.g. `git@github.com:org/repo.git`).
+    /// The `git_ref` is a branch, tag, or commit to check out.
+    ///
+    /// When set, catapulta clones the repo before building and
+    /// uses it as the build context. Combine with `.dockerfile()`
+    /// to select a specific Dockerfile within the cloned repo,
+    /// and `.context()` to scope the build context to a
+    /// subdirectory.
+    #[must_use]
+    pub fn source(mut self, ssh_url: &str, git_ref: &str) -> Self {
+        self.source = Some((ssh_url.to_string(), git_ref.to_string()));
+        self
+    }
+
+    /// Cache the cloned source repository between builds.
+    ///
+    /// When enabled, subsequent builds reuse the cached clone and
+    /// run `git fetch + git checkout` instead of a fresh clone.
+    /// The cache lives in `$TMPDIR/catapulta-src-{name}/`.
+    ///
+    /// Default: false (fresh clone every time, cleaned up after
+    /// build).
+    #[must_use]
+    pub const fn cache_source(mut self, cache: bool) -> Self {
+        self.cache_source = cache;
         self
     }
 

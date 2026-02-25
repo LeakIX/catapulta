@@ -49,6 +49,10 @@ lint: ## Run linter
 test: ## Run tests
 	cargo test
 
+.PHONY: test-integration
+test-integration: ## Run integration tests (requires Docker)
+	cargo test --features integration -- --nocapture
+
 .PHONY: test-verbose
 test-verbose: ## Run tests with output
 	cargo test -- --nocapture

@@ -80,6 +80,18 @@ jobs:
       - name: Run shellcheck
         run: make lint-shell
 
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run integration tests
+        run: make test-integration
+
   documentation:
     runs-on: ubuntu-latest
     steps:

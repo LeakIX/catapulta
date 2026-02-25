@@ -12,6 +12,9 @@ keywords = ["deployment", "docker", "vps", "devops", "ssh"]
 categories = ["command-line-utilities", "development-tools", "config"]
 exclude = [".github/", "taplo.toml"]
 
+[features]
+integration = []
+
 [lints.clippy]
 all = "deny"
 pedantic = "deny"

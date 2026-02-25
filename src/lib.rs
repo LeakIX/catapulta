@@ -208,6 +208,57 @@
 //! }
 //! ```
 //!
+//! ## Remote Git source
+//!
+//! Build and deploy a Docker image from a remote Git repository
+//! instead of a local Dockerfile. This is useful for deploying
+//! third-party projects that provide a Dockerfile but no
+//! pre-built image.
+//!
+//! ```rust,no_run
+//! use catapulta::{
+//!     App, Caddy, DigitalOcean, DockerSaveLoad, Ovh, Pipeline,
+//! };
+//!
+//! fn main() -> anyhow::Result<()> {
+//!     let app = App::new("ms-waitlist-notifier")
+//!         .source(
+//!             "git@github.com:dannywillems/ms-waitlist-notifier.git",
+//!             "main",
+//!         )
+//!         .cache_source(true)
+//!         .env("PORT", "8080")
+//!         .healthcheck("curl -f http://localhost:8080/")
+//!         .expose(8080);
+//!
+//!     let caddy = Caddy::new()
+//!         .reverse_proxy(app.upstream())
+//!         .gzip()
+//!         .security_headers();
+//!
+//!     let pipeline = Pipeline::new(app, caddy)
+//!         .provision(DigitalOcean::new())
+//!         .dns(Ovh::new("notifier.example.com"))
+//!         .deploy(DockerSaveLoad::new());
+//!
+//!     pipeline.run()?;
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Use `.context()` to scope the build context to a subdirectory,
+//! and `.dockerfile()` to select a specific Dockerfile within the
+//! cloned repository:
+//!
+//! ```rust
+//! use catapulta::App;
+//!
+//! let app = App::new("my-service")
+//!     .source("git@github.com:org/monorepo.git", "v2.0")
+//!     .context("services/api")
+//!     .dockerfile("Dockerfile.prod");
+//! ```
+//!
 //! ## Home lab deployment with libvirt/KVM
 //!
 //! If you have a spare Linux machine (desktop, server, old

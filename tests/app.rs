@@ -14,6 +14,8 @@ fn defaults() {
     assert!(app.expose.is_empty());
     assert!(app.healthcheck.is_none());
     assert!(app.context.is_none());
+    assert!(app.source.is_none());
+    assert!(!app.cache_source);
 }
 
 #[test]
@@ -63,6 +65,8 @@ fn builder_chain() {
         Some("curl -f http://localhost:3000/")
     );
     assert_eq!(app.context.as_deref(), Some("deploy"));
+    assert!(app.source.is_none());
+    assert!(!app.cache_source);
 }
 
 #[test]
@@ -115,4 +119,36 @@ fn upstream_panics_without_ports() {
 fn upstream_port_panics_for_unknown_port() {
     let app = App::new("svc").expose(3000);
     let _ = app.upstream_port(9999);
+}
+
+#[test]
+fn source_builder() {
+    let app = App::new("myapp").source("git@github.com:org/repo.git", "main");
+
+    assert_eq!(
+        app.source,
+        Some(("git@github.com:org/repo.git".into(), "main".into()))
+    );
+}
+
+#[test]
+fn cache_source_builder() {
+    let app = App::new("myapp").cache_source(true);
+
+    assert!(app.cache_source);
+}
+
+#[test]
+fn source_with_dockerfile() {
+    let app = App::new("myapp")
+        .source("git@github.com:org/repo.git", "v1.0")
+        .dockerfile("deploy/Dockerfile")
+        .context("deploy");
+
+    assert_eq!(
+        app.source,
+        Some(("git@github.com:org/repo.git".into(), "v1.0".into()))
+    );
+    assert_eq!(app.dockerfile, "deploy/Dockerfile");
+    assert_eq!(app.context.as_deref(), Some("deploy"));
 }
