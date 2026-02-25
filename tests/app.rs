@@ -13,6 +13,7 @@ fn defaults() {
     assert!(app.volumes.is_empty());
     assert!(app.expose.is_empty());
     assert!(app.healthcheck.is_none());
+    assert!(app.context.is_none());
 }
 
 #[test]
@@ -29,7 +30,8 @@ fn builder_chain() {
         .volume("config", "/app/config")
         .expose(3000)
         .expose(8080)
-        .healthcheck("curl -f http://localhost:3000/");
+        .healthcheck("curl -f http://localhost:3000/")
+        .context("deploy");
 
     assert_eq!(app.dockerfile, "deploy/Dockerfile");
     assert_eq!(app.platform, "linux/arm64");
@@ -60,6 +62,7 @@ fn builder_chain() {
         app.healthcheck.as_deref(),
         Some("curl -f http://localhost:3000/")
     );
+    assert_eq!(app.context.as_deref(), Some("deploy"));
 }
 
 #[test]

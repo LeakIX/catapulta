@@ -61,6 +61,7 @@ pub struct App {
     pub expose: Vec<u16>,
     pub ports: Vec<(u16, u16)>,
     pub healthcheck: Option<String>,
+    pub context: Option<String>,
 }
 
 impl App {
@@ -77,6 +78,7 @@ impl App {
             expose: Vec::new(),
             ports: Vec::new(),
             healthcheck: None,
+            context: None,
         }
     }
 
@@ -130,6 +132,12 @@ impl App {
     #[must_use]
     pub fn port(mut self, host: u16, container: u16) -> Self {
         self.ports.push((host, container));
+        self
+    }
+
+    #[must_use]
+    pub fn context(mut self, path: &str) -> Self {
+        self.context = Some(path.to_string());
         self
     }
 

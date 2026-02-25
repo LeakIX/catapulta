@@ -67,7 +67,7 @@ impl Deployer for DockerSaveLoad {
         let tag = format!("{}:latest", app.name);
         args.push("-t");
         args.push(&tag);
-        args.push(".");
+        args.push(app.context.as_deref().unwrap_or("."));
 
         cmd::run_interactive("docker", &args)
     }
