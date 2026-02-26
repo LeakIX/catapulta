@@ -11,11 +11,11 @@ use crate::deploy::Deployer;
 use crate::error::{DeployError, DeployResult};
 use crate::ssh::SshSession;
 
-/// Deploy via `docker save | gzip | ssh | docker load`.
+/// Deploy via `docker save` + `rsync` + `docker load`.
 ///
 /// This is the simplest deployment strategy - no registry
 /// needed. The image is built locally for linux/amd64,
-/// streamed over SSH, then started with docker compose.
+/// rsynced to the remote host, then loaded with docker.
 pub struct DockerSaveLoad;
 
 impl DockerSaveLoad {
@@ -102,7 +102,7 @@ impl Deployer for DockerSaveLoad {
     fn transfer_image(&self, app: &App, host: &str, user: &str) -> DeployResult<()> {
         let tag = format!("{}:latest", app.name);
 
-        // Query image size for logging and progress
+        // Query image size for logging
         let size_bytes = cmd::run(
             "docker",
             &["image", "inspect", "--format", "{{.Size}}", &tag],
@@ -115,22 +115,45 @@ impl Deployer for DockerSaveLoad {
              to {user}@{host}"
         );
 
-        // Use pv for a progress bar when available
-        let progress = if cmd::command_exists("pv") {
-            format!("pv -s {size_bytes} -p -t -e -r -b")
-        } else {
-            "cat".to_string()
-        };
+        let local_tar = std::env::temp_dir().join(format!("catapulta-{}.tar", app.name));
+        let local_tar_str = local_tar.to_string_lossy().to_string();
+        let remote_tar = format!("/tmp/catapulta-{}.tar", app.name);
 
-        eprintln!(
-            "  Saving image, compressing, and streaming \
-             over SSH..."
+        // 1. Save image to local temp file
+        eprintln!("  Saving image to {local_tar_str}...");
+        let save_result = cmd::run_interactive("docker", &["save", &tag, "-o", &local_tar_str]);
+        if save_result.is_err() {
+            let _ = std::fs::remove_file(&local_tar);
+            return save_result;
+        }
+
+        // 2. rsync to remote with resume support
+        let ssh_cmd = "ssh -o StrictHostKeyChecking=accept-new \
+             -o ConnectTimeout=10";
+        let dest = format!("{user}@{host}:{remote_tar}");
+
+        eprintln!("  Syncing to {user}@{host}...");
+        let rsync_result = cmd::run_interactive(
+            "rsync",
+            &[
+                "-z",
+                "--progress",
+                "--partial",
+                "-e",
+                ssh_cmd,
+                &local_tar_str,
+                &dest,
+            ],
         );
-        let pipeline = format!(
-            "docker save {tag} | {progress} | gzip | \
-             ssh {user}@{host} 'gunzip | docker load'"
-        );
-        cmd::run_pipeline(&pipeline)?;
+        let _ = std::fs::remove_file(&local_tar);
+        rsync_result?;
+
+        // 3. Load on remote and clean up remote tar
+        let ssh = SshSession::new(host, user);
+        ssh.exec_interactive(&format!(
+            "docker load < {remote_tar} && \
+             rm -f {remote_tar}"
+        ))?;
 
         eprintln!("  Image loaded on {host}");
         Ok(())
