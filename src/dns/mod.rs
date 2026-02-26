@@ -1,9 +1,9 @@
 pub mod cloudflare;
 pub mod ovh;
 
-use crate::error::DeployResult;
+use crate::error::{DeployError, DeployResult};
 
-/// A DNS provider that can create, update, and delete A records.
+/// A DNS provider that can create, update, and delete records.
 pub trait DnsProvider {
     /// The fully-qualified domain name managed by this provider.
     fn domain(&self) -> &str;
@@ -13,6 +13,21 @@ pub trait DnsProvider {
 
     /// Delete the A record for this domain.
     fn delete_a_record(&self) -> DeployResult<()>;
+
+    /// Create or update a CNAME record pointing to `target`.
+    fn upsert_cname_record(&self, target: &str) -> DeployResult<()> {
+        let _ = target;
+        Err(DeployError::Other(
+            "CNAME records not supported by this provider".into(),
+        ))
+    }
+
+    /// Delete the CNAME record for this domain.
+    fn delete_cname_record(&self) -> DeployResult<()> {
+        Err(DeployError::Other(
+            "CNAME records not supported by this provider".into(),
+        ))
+    }
 }
 
 /// Split an FQDN into (zone, subdomain).

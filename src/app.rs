@@ -64,6 +64,8 @@ pub struct App {
     pub context: Option<String>,
     pub source: Option<(String, String)>,
     pub cache_source: bool,
+    pub build_cmd: Option<String>,
+    pub build_dir: Option<String>,
 }
 
 impl App {
@@ -83,6 +85,8 @@ impl App {
             context: None,
             source: None,
             cache_source: false,
+            build_cmd: None,
+            build_dir: None,
         }
     }
 
@@ -173,6 +177,21 @@ impl App {
     #[must_use]
     pub const fn cache_source(mut self, cache: bool) -> Self {
         self.cache_source = cache;
+        self
+    }
+
+    /// Shell command to build the static site (e.g. `"npm run build"`).
+    #[must_use]
+    pub fn build_cmd(mut self, cmd: &str) -> Self {
+        self.build_cmd = Some(cmd.to_string());
+        self
+    }
+
+    /// Output directory produced by the build command
+    /// (e.g. `"dist"`).
+    #[must_use]
+    pub fn build_dir(mut self, dir: &str) -> Self {
+        self.build_dir = Some(dir.to_string());
         self
     }
 

@@ -164,6 +164,38 @@
 //! }
 //! ```
 //!
+//! ## Cloudflare Pages (static sites)
+//!
+//! Deploy a static frontend to Cloudflare Pages instead of
+//! running it as a Docker container. The pipeline builds the
+//! site locally and publishes via `wrangler pages deploy`.
+//! A CNAME record is created automatically if a DNS provider
+//! is configured.
+//!
+//! Requires `wrangler` on `PATH` and `CLOUDFLARE_API_TOKEN`
+//! (or `CF_API_TOKEN` when using Cloudflare DNS as well).
+//!
+//! ```rust,no_run
+//! use catapulta::{
+//!     App, Caddy, Cloudflare, CloudflarePages, Pipeline,
+//! };
+//!
+//! fn main() -> anyhow::Result<()> {
+//!     let web = App::new("my-site")
+//!         .build_cmd("npm run build")
+//!         .build_dir("dist");
+//!
+//!     let caddy = Caddy::new();
+//!
+//!     let pipeline = Pipeline::new(web, caddy)
+//!         .dns(Cloudflare::new("my-site.example.com"))
+//!         .deploy(CloudflarePages::new("my-project"));
+//!
+//!     pipeline.run()?;
+//!     Ok(())
+//! }
+//! ```
+//!
 //! ## Basic authentication
 //!
 //! Protect the application behind HTTP basic auth. The ACME
@@ -446,6 +478,7 @@ pub mod ssh;
 pub use app::App;
 pub use app::Upstream;
 pub use caddy::Caddy;
+pub use deploy::cloudflare_pages::CloudflarePages;
 pub use deploy::docker_save::DockerSaveLoad;
 pub use dns::cloudflare::Cloudflare;
 pub use dns::ovh::Ovh;

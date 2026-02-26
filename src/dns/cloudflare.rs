@@ -93,6 +93,26 @@ impl Cloudflare {
 
         Ok(response.result.first().map(|r| r.id.clone()))
     }
+
+    fn find_existing_cname_record(
+        client: &Client,
+        zone_id: &str,
+        domain: &str,
+    ) -> DeployResult<Option<String>> {
+        let response = Self::block_on(client.request(&ListDnsRecords {
+            zone_identifier: zone_id,
+            params: ListDnsRecordsParams {
+                name: Some(domain.to_string()),
+                record_type: Some(DnsContent::CNAME {
+                    content: String::new(),
+                }),
+                ..ListDnsRecordsParams::default()
+            },
+        }))?
+        .map_err(|e| DeployError::DnsError(e.to_string()))?;
+
+        Ok(response.result.first().map(|r| r.id.clone()))
+    }
 }
 
 impl DnsProvider for Cloudflare {
@@ -152,6 +172,84 @@ impl DnsProvider for Cloudflare {
         }
 
         eprintln!("DNS record set: {} -> {ip}", self.domain);
+        Ok(())
+    }
+
+    fn upsert_cname_record(&self, target: &str) -> DeployResult<()> {
+        let token = Self::token()?;
+        let client = Self::client(&token)?;
+        let (zone, subdomain) = dns::split_domain(&self.domain);
+
+        eprintln!("Cloudflare DNS: {} -> CNAME {target}", self.domain);
+        eprintln!("  Zone: {zone}");
+        eprintln!(
+            "  Record: {}",
+            if subdomain.is_empty() {
+                "@"
+            } else {
+                &subdomain
+            }
+        );
+
+        let zone_id = Self::get_zone_id(&client, &zone)?;
+        let existing = Self::find_existing_cname_record(&client, &zone_id, &self.domain)?;
+
+        if let Some(record_id) = existing {
+            eprintln!("  Updating existing CNAME record...");
+            Self::block_on(client.request(&UpdateDnsRecord {
+                zone_identifier: &zone_id,
+                identifier: &record_id,
+                params: UpdateDnsRecordParams {
+                    ttl: Some(300),
+                    proxied: Some(false),
+                    name: &self.domain,
+                    content: DnsContent::CNAME {
+                        content: target.to_string(),
+                    },
+                },
+            }))?
+            .map_err(|e| DeployError::DnsError(e.to_string()))?;
+        } else {
+            eprintln!("  Creating new CNAME record...");
+            Self::block_on(client.request(&CreateDnsRecord {
+                zone_identifier: &zone_id,
+                params: CreateDnsRecordParams {
+                    ttl: Some(300),
+                    priority: None,
+                    proxied: Some(false),
+                    name: &self.domain,
+                    content: DnsContent::CNAME {
+                        content: target.to_string(),
+                    },
+                },
+            }))?
+            .map_err(|e| DeployError::DnsError(e.to_string()))?;
+        }
+
+        eprintln!("CNAME record set: {} -> {target}", self.domain);
+        Ok(())
+    }
+
+    fn delete_cname_record(&self) -> DeployResult<()> {
+        let token = Self::token()?;
+        let client = Self::client(&token)?;
+        let (zone, _) = dns::split_domain(&self.domain);
+
+        let zone_id = Self::get_zone_id(&client, &zone)?;
+        let existing = Self::find_existing_cname_record(&client, &zone_id, &self.domain)?;
+
+        if let Some(record_id) = existing {
+            eprintln!("  Deleting CNAME record...");
+            Self::block_on(client.request(&DeleteDnsRecord {
+                zone_identifier: &zone_id,
+                identifier: &record_id,
+            }))?
+            .map_err(|e| DeployError::DnsError(e.to_string()))?;
+            eprintln!("CNAME record deleted: {}", self.domain);
+        } else {
+            eprintln!("No CNAME record found for {}", self.domain);
+        }
+
         Ok(())
     }
 
