@@ -136,7 +136,7 @@ impl Deployer for DockerSaveLoad {
         let rsync_result = cmd::run_interactive(
             "rsync",
             &[
-                "-z",
+                "-vz",
                 "--progress",
                 "--partial",
                 "-e",
@@ -149,12 +149,12 @@ impl Deployer for DockerSaveLoad {
         rsync_result?;
 
         // 3. Load on remote and clean up remote tar
+        eprintln!("  Loading image on remote...");
         let ssh = SshSession::new(host, user);
         ssh.exec_interactive(&format!(
             "docker load < {remote_tar} && \
              rm -f {remote_tar}"
         ))?;
-
         eprintln!("  Image loaded on {host}");
         Ok(())
     }
