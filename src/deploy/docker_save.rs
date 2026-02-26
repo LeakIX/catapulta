@@ -198,13 +198,9 @@ impl Deployer for DockerSaveLoad {
             }
         }
 
-        // Restart containers
+        // Start containers with new images
         eprintln!("Starting containers...");
-        ssh.exec_interactive(&format!(
-            "cd {remote_dir} && \
-             docker compose down 2>/dev/null || true && \
-             docker compose up -d"
-        ))?;
+        ssh.exec_interactive(&format!("cd {remote_dir} && docker compose up -d"))?;
 
         // Wait for health
         wait_healthy(&ssh, apps, remote_dir)?;

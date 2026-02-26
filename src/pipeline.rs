@@ -176,6 +176,15 @@ impl Pipeline {
             }
         }
 
+        // Stop containers before loading to free memory on
+        // constrained VPS instances
+        eprintln!("Stopping containers...");
+        let ssh = SshSession::new(host, &self.ssh_user);
+        ssh.exec(&format!(
+            "cd {} && docker compose down 2>/dev/null || true",
+            self.remote_dir
+        ))?;
+
         for app in &self.apps {
             deployer.transfer_image(app, host, &self.ssh_user)?;
         }
