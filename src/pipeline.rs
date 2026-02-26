@@ -101,7 +101,7 @@ impl Pipeline {
                 host,
                 skip_build,
                 dry_run,
-            } => self.cmd_deploy(host, *skip_build, *dry_run),
+            } => self.cmd_deploy(host.as_deref(), *skip_build, *dry_run),
             Command::Status { host } => self.cmd_status(host),
             Command::Destroy {
                 name,
@@ -160,15 +160,16 @@ impl Pipeline {
         Ok(())
     }
 
-    fn cmd_deploy(&self, host: &str, skip_build: bool, dry_run: bool) -> DeployResult<()> {
-        if dry_run {
-            return self.cmd_deploy_dry_run(host);
-        }
-
+    fn cmd_deploy(&self, host: Option<&str>, skip_build: bool, dry_run: bool) -> DeployResult<()> {
         let deployer = self
             .deployer
             .as_ref()
             .ok_or_else(|| DeployError::Other("no deployer configured".into()))?;
+
+        if dry_run {
+            let h = host.unwrap_or("localhost");
+            return self.cmd_deploy_dry_run(h);
+        }
 
         if !skip_build {
             for app in &self.apps {
@@ -176,26 +177,41 @@ impl Pipeline {
             }
         }
 
-        // Stop containers before loading to free memory on
-        // constrained VPS instances
-        eprintln!("Stopping containers...");
-        let ssh = SshSession::new(host, &self.ssh_user);
-        ssh.exec(&format!(
-            "cd {} && docker compose down 2>/dev/null || true",
-            self.remote_dir
-        ))?;
+        if deployer.is_remote() {
+            let host = host.ok_or_else(|| {
+                DeployError::Other("host argument required for remote deployers".into())
+            })?;
 
-        for app in &self.apps {
-            deployer.transfer_image(app, host, &self.ssh_user)?;
+            // Stop containers before loading to free memory on
+            // constrained VPS instances
+            eprintln!("Stopping containers...");
+            let ssh = SshSession::new(host, &self.ssh_user);
+            ssh.exec(&format!(
+                "cd {} && docker compose down 2>/dev/null || true",
+                self.remote_dir
+            ))?;
+
+            for app in &self.apps {
+                deployer.transfer_image(app, host, &self.ssh_user)?;
+            }
+
+            deployer.deploy(
+                host,
+                &self.ssh_user,
+                &self.apps,
+                &self.caddy,
+                &self.remote_dir,
+            )?;
+        } else {
+            deployer.deploy("", "", &self.apps, &self.caddy, "")?;
+
+            // Set up CNAME records via DNS providers
+            if let Some(target) = deployer.cname_target() {
+                for dns in &self.dns {
+                    dns.upsert_cname_record(&target)?;
+                }
+            }
         }
-
-        deployer.deploy(
-            host,
-            &self.ssh_user,
-            &self.apps,
-            &self.caddy,
-            &self.remote_dir,
-        )?;
 
         Ok(())
     }
@@ -315,8 +331,9 @@ enum Command {
 
     /// Deploy to a server
     Deploy {
-        /// Hostname or IP address
-        host: String,
+        /// Hostname or IP address (not required for local
+        /// deployers like Cloudflare Pages)
+        host: Option<String>,
 
         /// Skip Docker image build
         #[arg(long)]

@@ -1,3 +1,4 @@
+pub mod cloudflare_pages;
 pub mod docker_save;
 
 use crate::app::App;
@@ -22,4 +23,20 @@ pub trait Deployer {
         caddy: &Caddy,
         remote_dir: &str,
     ) -> DeployResult<()>;
+
+    /// Whether this deployer targets a remote host via SSH.
+    ///
+    /// Returns `false` for local deployers like Cloudflare Pages
+    /// that do not need SSH access.
+    fn is_remote(&self) -> bool {
+        true
+    }
+
+    /// CNAME target for DNS setup (e.g. `"project.pages.dev"`).
+    ///
+    /// Non-remote deployers may return a value so the pipeline
+    /// can create CNAME records automatically.
+    fn cname_target(&self) -> Option<String> {
+        None
+    }
 }
