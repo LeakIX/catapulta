@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-12
+
+### Added
+
+- `Pipeline::docker_cp()` builder method for copying local files into running
+  containers after deployment via `docker cp` ([52002c9])
+
 ## [0.7.0] - 2026-03-12
 
 ### Added
@@ -157,6 +164,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[52002c9]: https://github.com/LeakIX/catapulta/commit/52002c9
 [5d24673]: https://github.com/LeakIX/catapulta/commit/5d24673
 [57b9014]: https://github.com/LeakIX/catapulta/commit/57b9014
 [3d183ec]: https://github.com/LeakIX/catapulta/commit/3d183ec
@@ -195,6 +203,7 @@ All notable changes to this project will be documented in this file.
 [#4]: https://github.com/LeakIX/catapulta/issues/4
 
 <!-- Release links -->
+[0.8.0]: https://github.com/LeakIX/catapulta/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/LeakIX/catapulta/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/LeakIX/catapulta/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/LeakIX/catapulta/compare/v0.4.0...v0.5.0
