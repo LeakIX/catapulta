@@ -10,6 +10,14 @@ use crate::error::{DeployError, DeployResult};
 use crate::provision::Provisioner;
 use crate::ssh::SshSession;
 
+/// Action to run on the remote host after deployment.
+enum PostDeployHook {
+    /// Upload a local file to a remote path.
+    Upload { local: String, remote: String },
+    /// Execute a shell command on the remote host.
+    Exec(String),
+}
+
 /// Deployment pipeline orchestrating provisioning, DNS, and
 /// deployment.
 pub struct Pipeline {
@@ -20,6 +28,7 @@ pub struct Pipeline {
     deployer: Option<Box<dyn Deployer>>,
     remote_dir: String,
     ssh_user: String,
+    post_deploy: Vec<PostDeployHook>,
 }
 
 impl Pipeline {
@@ -34,6 +43,7 @@ impl Pipeline {
             deployer: None,
             remote_dir: "/opt/app".to_string(),
             ssh_user: "root".to_string(),
+            post_deploy: Vec::new(),
         }
     }
 
@@ -49,6 +59,7 @@ impl Pipeline {
             deployer: None,
             remote_dir: "/opt/app".to_string(),
             ssh_user: "root".to_string(),
+            post_deploy: Vec::new(),
         }
     }
 
@@ -79,6 +90,31 @@ impl Pipeline {
     #[must_use]
     pub fn ssh_user(mut self, user: &str) -> Self {
         self.ssh_user = user.to_string();
+        self
+    }
+
+    /// Upload a local file to the remote host after deployment.
+    ///
+    /// The remote path can be absolute or relative to the remote
+    /// deployment directory. Skipped during `--dry-run`.
+    #[must_use]
+    pub fn upload(mut self, local: &str, remote: &str) -> Self {
+        self.post_deploy.push(PostDeployHook::Upload {
+            local: local.to_string(),
+            remote: remote.to_string(),
+        });
+        self
+    }
+
+    /// Execute a shell command on the remote host after
+    /// deployment.
+    ///
+    /// Commands run in order after containers are healthy.
+    /// Skipped during `--dry-run`.
+    #[must_use]
+    pub fn after_deploy(mut self, command: &str) -> Self {
+        self.post_deploy
+            .push(PostDeployHook::Exec(command.to_string()));
         self
     }
 
@@ -197,6 +233,23 @@ impl Pipeline {
             &self.remote_dir,
         )?;
 
+        if !self.post_deploy.is_empty() {
+            eprintln!("Running post-deploy hooks...");
+            let ssh = SshSession::new(host, &self.ssh_user);
+            for hook in &self.post_deploy {
+                match hook {
+                    PostDeployHook::Upload { local, remote } => {
+                        eprintln!("  Uploading {local} -> {remote}");
+                        ssh.scp_to(local, remote)?;
+                    }
+                    PostDeployHook::Exec(cmd) => {
+                        eprintln!("  Running: {cmd}");
+                        ssh.exec_interactive(cmd)?;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -233,6 +286,22 @@ impl Pipeline {
             step += 1;
         }
         eprintln!("{step}. Restart containers via docker compose");
+
+        if !self.post_deploy.is_empty() {
+            eprintln!();
+            eprintln!("--- Post-deploy hooks ---");
+            for (i, hook) in self.post_deploy.iter().enumerate() {
+                let n = i + 1;
+                match hook {
+                    PostDeployHook::Upload { local, remote } => {
+                        eprintln!("{n}. Upload {local} -> {remote}");
+                    }
+                    PostDeployHook::Exec(cmd) => {
+                        eprintln!("{n}. Run: {cmd}");
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
