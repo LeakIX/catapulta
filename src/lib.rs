@@ -208,6 +208,50 @@
 //! }
 //! ```
 //!
+//! ## Post-deploy hooks
+//!
+//! Run commands or upload files on the remote host after
+//! containers are healthy. Useful for syncing files into Docker
+//! volumes or running database migrations.
+//!
+//! ```rust,no_run
+//! use catapulta::{
+//!     App, Caddy, DigitalOcean, DockerSaveLoad, Ovh, Pipeline,
+//! };
+//!
+//! fn main() -> anyhow::Result<()> {
+//!     let app = App::new("my-service")
+//!         .dockerfile("Dockerfile")
+//!         .env("DATABASE_URL", "sqlite:/app/data/app.db")
+//!         .volume("app-data", "/app/data")
+//!         .healthcheck("curl -f http://localhost:3000/")
+//!         .expose(3000);
+//!
+//!     let caddy = Caddy::new()
+//!         .reverse_proxy(app.upstream())
+//!         .gzip()
+//!         .security_headers();
+//!
+//!     let pipeline = Pipeline::new(app, caddy)
+//!         .provision(DigitalOcean::new())
+//!         .dns(Ovh::new("service.example.com"))
+//!         .deploy(DockerSaveLoad::new())
+//!         .upload(
+//!             "data/seed.db",
+//!             "/opt/app/volumes/app-data/app.db",
+//!         )
+//!         .after_deploy(
+//!             "docker exec my-service /app/migrate",
+//!         );
+//!
+//!     pipeline.run()?;
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Hooks run in declaration order after containers are healthy.
+//! During `--dry-run`, hooks are listed but not executed.
+//!
 //! ## Remote Git source
 //!
 //! Build and deploy a Docker image from a remote Git repository
