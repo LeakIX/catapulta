@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-12
+
+### Added
+
+- `Pipeline::upload()` builder method for uploading files to the remote host
+  after deployment ([5d24673], [#22])
+- `Pipeline::after_deploy()` builder method for running shell commands on the
+  remote host after containers are healthy ([5d24673], [#22])
+- Post-deploy hooks listed in `--dry-run` output ([5d24673], [#22])
+- Documentation example for post-deploy hooks ([5d24673], [#22])
+
+### Changed
+
+- Replace `docker save | ssh docker load` pipe with rsync-based image transfer
+  for resume support and progress reporting ([57b9014])
+- Stop containers before image transfer to free memory on constrained VPS
+  instances ([3d183ec])
+
 ## [0.6.0] - 2026-02-25
 
 ### Added
@@ -139,6 +157,9 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[5d24673]: https://github.com/LeakIX/catapulta/commit/5d24673
+[57b9014]: https://github.com/LeakIX/catapulta/commit/57b9014
+[3d183ec]: https://github.com/LeakIX/catapulta/commit/3d183ec
 [f7394c3]: https://github.com/LeakIX/catapulta/commit/f7394c3
 [15f4687]: https://github.com/LeakIX/catapulta/commit/15f4687
 [5611350]: https://github.com/LeakIX/catapulta/commit/5611350
@@ -161,6 +182,7 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#22]: https://github.com/LeakIX/catapulta/issues/22
 [#13]: https://github.com/LeakIX/catapulta/issues/13
 [#12]: https://github.com/LeakIX/catapulta/issues/12
 [#11]: https://github.com/LeakIX/catapulta/issues/11
@@ -173,6 +195,7 @@ All notable changes to this project will be documented in this file.
 [#4]: https://github.com/LeakIX/catapulta/issues/4
 
 <!-- Release links -->
+[0.7.0]: https://github.com/LeakIX/catapulta/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/LeakIX/catapulta/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/LeakIX/catapulta/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/LeakIX/catapulta/compare/v0.3.0...v0.4.0
