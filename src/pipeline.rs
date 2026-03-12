@@ -14,6 +14,12 @@ use crate::ssh::SshSession;
 enum PostDeployHook {
     /// Upload a local file to a remote path.
     Upload { local: String, remote: String },
+    /// Copy a local file into a running container.
+    DockerCp {
+        local: String,
+        container: String,
+        path: String,
+    },
     /// Execute a shell command on the remote host.
     Exec(String),
 }
@@ -102,6 +108,22 @@ impl Pipeline {
         self.post_deploy.push(PostDeployHook::Upload {
             local: local.to_string(),
             remote: remote.to_string(),
+        });
+        self
+    }
+
+    /// Copy a local file into a running container after
+    /// deployment.
+    ///
+    /// Uploads the file to the remote host via SCP, then runs
+    /// `docker cp` to place it inside the container. The
+    /// temporary remote copy is removed afterwards.
+    #[must_use]
+    pub fn docker_cp(mut self, local: &str, container: &str, path: &str) -> Self {
+        self.post_deploy.push(PostDeployHook::DockerCp {
+            local: local.to_string(),
+            container: container.to_string(),
+            path: path.to_string(),
         });
         self
     }
@@ -242,6 +264,26 @@ impl Pipeline {
                         eprintln!("  Uploading {local} -> {remote}");
                         ssh.scp_to(local, remote)?;
                     }
+                    PostDeployHook::DockerCp {
+                        local,
+                        container,
+                        path,
+                    } => {
+                        let filename = std::path::Path::new(local)
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy();
+                        let tmp = format!("/tmp/catapulta-cp-{filename}");
+                        eprintln!(
+                            "  docker cp {local} -> \
+                             {container}:{path}"
+                        );
+                        ssh.scp_to(local, &tmp)?;
+                        ssh.exec_interactive(&format!(
+                            "docker cp {tmp} {container}:{path} \
+                             && rm -f {tmp}"
+                        ))?;
+                    }
                     PostDeployHook::Exec(cmd) => {
                         eprintln!("  Running: {cmd}");
                         ssh.exec_interactive(cmd)?;
@@ -295,6 +337,16 @@ impl Pipeline {
                 match hook {
                     PostDeployHook::Upload { local, remote } => {
                         eprintln!("{n}. Upload {local} -> {remote}");
+                    }
+                    PostDeployHook::DockerCp {
+                        local,
+                        container,
+                        path,
+                    } => {
+                        eprintln!(
+                            "{n}. docker cp {local} -> \
+                             {container}:{path}"
+                        );
                     }
                     PostDeployHook::Exec(cmd) => {
                         eprintln!("{n}. Run: {cmd}");

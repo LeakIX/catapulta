@@ -240,6 +240,11 @@
 //!             "data/seed.db",
 //!             "/opt/app/volumes/app-data/app.db",
 //!         )
+//!         .docker_cp(
+//!             "data/config.toml",
+//!             "my-service",
+//!             "/app/config.toml",
+//!         )
 //!         .after_deploy(
 //!             "docker exec my-service /app/migrate",
 //!         );
