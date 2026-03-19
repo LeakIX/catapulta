@@ -22,7 +22,7 @@ nursery = "deny"
 
 [dependencies]
 caddyfile-rs = "0.1"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 docker-compose-types = { version = "0.22", features = ["indexmap"] }
 indexmap = "2"
 serde = { version = "1.0", features = ["derive"] }
