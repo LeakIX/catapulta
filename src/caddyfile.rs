@@ -49,9 +49,10 @@ fn add_maintenance_page(site: SiteBlock, path: &str) -> SiteBlock {
             )
         });
 
-    // Caddy's respond with heredoc uses a specific inline
-    // syntax that the caddyfile-rs AST cannot represent
-    // directly. Use a raw directive string instead.
+    // Caddy heredocs require consistent leading whitespace.
+    // The HTML content has no indentation, so the closing
+    // marker must also have none. We close the Caddy blocks
+    // after the heredoc ends.
     let raw = format!(
         "handle_errors {{\n\
          \t\t@deploying expression \
@@ -61,7 +62,7 @@ fn add_maintenance_page(site: SiteBlock, path: &str) -> SiteBlock {
          \"text/html; charset=utf-8\"\n\
          \t\t\trespond <<HTML\n\
          {html}\n\
-         \t\t\tHTML 200\n\
+         HTML 200\n\
          \t\t}}\n\
          \t}}"
     );
