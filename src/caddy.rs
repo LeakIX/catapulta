@@ -34,6 +34,11 @@ pub struct Caddy {
     /// Custom volumes to mount into the Caddy container.
     /// Each entry is `(host_path_or_name, container_path)`.
     pub volumes: Vec<(String, String)>,
+    /// Path to an HTML file to serve as a maintenance page on
+    /// 502/503/504 errors (e.g. when backend containers are down
+    /// during deployment). The file content is embedded into the
+    /// Caddyfile as a `handle_errors` block with `respond`.
+    pub maintenance_page: Option<String>,
 }
 
 impl Caddy {
@@ -96,6 +101,18 @@ impl Caddy {
     #[must_use]
     pub fn volume(mut self, host: &str, container: &str) -> Self {
         self.volumes.push((host.to_string(), container.to_string()));
+        self
+    }
+
+    /// Set a maintenance page served on 502/503/504 errors.
+    ///
+    /// The given path should point to a local HTML file. Its
+    /// content is embedded into the Caddyfile so Caddy can serve
+    /// it when backend containers are unreachable (e.g. during
+    /// deployment).
+    #[must_use]
+    pub fn maintenance_page(mut self, html_path: &str) -> Self {
+        self.maintenance_page = Some(html_path.to_string());
         self
     }
 }

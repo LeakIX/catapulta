@@ -235,13 +235,44 @@ impl Pipeline {
         }
 
         // Stop containers before loading to free memory on
-        // constrained VPS instances
+        // constrained VPS instances.
+        // When a maintenance page is configured, keep Caddy
+        // running so it can serve the maintenance page while
+        // app containers are down.
         eprintln!("Stopping containers...");
         let ssh = SshSession::new(host, &self.ssh_user);
-        ssh.exec(&format!(
-            "cd {} && docker compose down 2>/dev/null || true",
-            self.remote_dir
-        ))?;
+        if self.caddy.maintenance_page.is_some() {
+            // First, deploy updated Caddyfile with handle_errors
+            // so Caddy can serve the maintenance page.
+            let caddyfile_content =
+                caddyfile::render(&self.caddy, host);
+            ssh.write_remote_file(
+                &caddyfile_content,
+                &format!("{}/Caddyfile", self.remote_dir),
+            )?;
+            // Reload Caddy config if it's running
+            ssh.exec(&format!(
+                "cd {} && docker compose exec -T caddy \
+                 caddy reload --config /etc/caddy/Caddyfile \
+                 2>/dev/null || true",
+                self.remote_dir,
+            ))?;
+            // Only stop app containers, keep Caddy running
+            let app_names: Vec<&str> =
+                self.apps.iter().map(|a| a.name.as_str()).collect();
+            let names = app_names.join(" ");
+            ssh.exec(&format!(
+                "cd {} && docker compose rm -sf {} \
+                 2>/dev/null || true",
+                self.remote_dir, names,
+            ))?;
+        } else {
+            ssh.exec(&format!(
+                "cd {} && docker compose down \
+                 2>/dev/null || true",
+                self.remote_dir
+            ))?;
+        }
 
         for app in &self.apps {
             deployer.transfer_image(app, host, &self.ssh_user)?;

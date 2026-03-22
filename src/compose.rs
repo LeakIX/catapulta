@@ -51,10 +51,19 @@ fn caddy_service(apps: &[App], caddy: &Caddy, network_name: &str) -> Service {
         }
     }
 
+    // When maintenance_page is enabled, Caddy must be able
+    // to start and stay running independently of app
+    // containers so it can serve the maintenance page during
+    // deployment.
     let mut depends = IndexMap::new();
-    for app in apps {
-        if proxied_names.contains(&app.name.as_str()) {
-            depends.insert(app.name.clone(), DependsCondition::service_healthy());
+    if caddy.maintenance_page.is_none() {
+        for app in apps {
+            if proxied_names.contains(&app.name.as_str()) {
+                depends.insert(
+                    app.name.clone(),
+                    DependsCondition::service_healthy(),
+                );
+            }
         }
     }
 

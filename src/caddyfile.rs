@@ -30,8 +30,64 @@ pub fn render(caddy: &Caddy, domain: &str) -> String {
         site = site.directive(Directive::new(d));
     }
 
+    if let Some(ref path) = caddy.maintenance_page {
+        site = add_maintenance_page(site, path);
+    }
+
     let caddyfile = Caddyfile::new().site(site);
     format(&caddyfile)
+}
+
+/// Add `handle_errors` block that serves a user-provided
+/// maintenance page on 502, 503, and 504 errors.
+fn add_maintenance_page(site: SiteBlock, path: &str) -> SiteBlock {
+    use caddyfile_rs::Argument;
+
+    let html =
+        std::fs::read_to_string(path).unwrap_or_else(|e| {
+            panic!(
+                "failed to read maintenance page at \
+                 '{path}': {e}"
+            )
+        });
+
+    // @deploying expression {err.status_code} in [502, 503, 504]
+    let matcher_def = Directive::new("@deploying")
+        .arg("expression")
+        .arg("{err.status_code}")
+        .arg("in")
+        .arg("[502,")
+        .arg("503,")
+        .arg("504]");
+
+    // header Content-Type "text/html; charset=utf-8"
+    let header = Directive::new("header")
+        .arg("Content-Type")
+        .quoted_arg("text/html; charset=utf-8");
+
+    // respond <<HTML ... HTML 200
+    let respond = Directive::new("respond")
+        .arg("200")
+        .block(vec![Directive {
+            name: String::new(),
+            matcher: None,
+            arguments: vec![Argument::Heredoc {
+                marker: "HTML".to_string(),
+                content: html,
+            }],
+            block: None,
+        }]);
+
+    // handle @deploying { ... }
+    let handle = Directive::new("handle")
+        .matcher(Matcher::Named("deploying".to_string()))
+        .block(vec![header, respond]);
+
+    // handle_errors { ... }
+    let handle_errors = Directive::new("handle_errors")
+        .block(vec![matcher_def, handle]);
+
+    site.directive(handle_errors)
 }
 
 /// Build `handle` directives for path-based routing.
