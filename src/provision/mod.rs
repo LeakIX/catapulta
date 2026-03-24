@@ -11,8 +11,8 @@ pub struct ServerInfo {
     pub name: String,
     pub ip: String,
     pub region: String,
-    pub ssh_key_id: String,
-    pub ssh_key_file: String,
+    pub ssh_key_ids: Vec<String>,
+    pub ssh_key_files: Vec<String>,
 }
 
 /// A provisioner creates, configures, and destroys cloud servers.
@@ -21,18 +21,22 @@ pub trait Provisioner {
     /// authenticated.
     fn check_prerequisites(&self) -> DeployResult<()>;
 
-    /// Detect the SSH key to use for provisioning.
+    /// Detect SSH keys to use for provisioning.
     ///
-    /// Returns `(key_id, key_file)` where `key_id` is the
-    /// provider-specific identifier and `key_file` is the local
-    /// private key path.
-    fn detect_ssh_key(&self) -> DeployResult<(String, String)> {
-        Ok((String::new(), String::new()))
+    /// Returns a list of `(key_id, key_file)` pairs where
+    /// `key_id` is the provider-specific identifier and
+    /// `key_file` is the local private key path.
+    fn detect_ssh_keys(&self) -> DeployResult<Vec<(String, String)>> {
+        Ok(Vec::new())
     }
 
     /// Create a new server and return its info.
-    fn create_server(&self, name: &str, region: &str, ssh_key_id: &str)
-    -> DeployResult<ServerInfo>;
+    fn create_server(
+        &self,
+        name: &str,
+        region: &str,
+        ssh_key_ids: &[String],
+    ) -> DeployResult<ServerInfo>;
 
     /// Install Docker, configure firewall, start Caddy
     /// placeholder.

@@ -40,9 +40,11 @@ impl DigitalOcean {
         self
     }
 
-    /// Detect the SSH key registered with `DigitalOcean` and
-    /// find the matching local private key.
-    fn detect_do_ssh_key() -> DeployResult<(String, String)> {
+    /// Detect all SSH keys registered with `DigitalOcean` that
+    /// have a matching local private key.
+    ///
+    /// Returns a list of `(key_id, private_key_path)` pairs.
+    fn detect_do_ssh_keys() -> DeployResult<Vec<(String, String)>> {
         let output = cmd::run(
             "doctl",
             &[
@@ -55,21 +57,26 @@ impl DigitalOcean {
             ],
         )?;
 
-        let first_line = output.lines().next().ok_or_else(|| {
-            DeployError::PrerequisiteMissing("no SSH keys found in DigitalOcean".into())
-        })?;
-
-        let parts: Vec<&str> = first_line.split_whitespace().collect();
-        if parts.len() < 2 {
+        if output.trim().is_empty() {
             return Err(DeployError::PrerequisiteMissing(
-                "unexpected doctl ssh-key list format".into(),
+                "no SSH keys found in DigitalOcean".into(),
             ));
         }
 
-        let key_id = parts[0].to_string();
-        let do_fingerprint = parts[1];
+        // Collect all DO keys
+        let do_keys: Vec<(&str, &str)> = output
+            .lines()
+            .filter_map(|line| {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    Some((parts[0], parts[1]))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-        // Find matching local key
+        // Find matching local keys
         let home = std::env::var("HOME").map_err(|_| DeployError::EnvMissing("HOME".into()))?;
         let ssh_dir = PathBuf::from(&home).join(".ssh");
 
@@ -80,38 +87,47 @@ impl DigitalOcean {
             .filter(|p| p.extension().is_some_and(|ext| ext == "pub"))
             .collect();
 
-        for pub_key in &pub_keys {
-            let pub_key_str = pub_key.to_string_lossy().to_string();
-            let local_fp = cmd::run("ssh-keygen", &["-l", "-E", "md5", "-f", &pub_key_str]);
+        let mut matched = Vec::new();
 
-            if let Ok(fp_output) = local_fp {
-                let local_fingerprint = fp_output
-                    .split_whitespace()
-                    .nth(1)
-                    .unwrap_or("")
-                    .strip_prefix("MD5:")
-                    .unwrap_or("");
+        for (key_id, do_fingerprint) in &do_keys {
+            for pub_key in &pub_keys {
+                let pub_key_str = pub_key.to_string_lossy().to_string();
+                let local_fp = cmd::run("ssh-keygen", &["-l", "-E", "md5", "-f", &pub_key_str]);
 
-                if local_fingerprint == do_fingerprint {
-                    // Private key is the pub key path without
-                    // .pub extension
-                    let private_key = pub_key_str
-                        .strip_suffix(".pub")
-                        .unwrap_or(&pub_key_str)
-                        .to_string();
-                    eprintln!(
-                        "SSH key: {private_key} \
-                         (ID: {key_id})"
-                    );
-                    return Ok((key_id, private_key));
+                if let Ok(fp_output) = local_fp {
+                    let local_fingerprint = fp_output
+                        .split_whitespace()
+                        .nth(1)
+                        .unwrap_or("")
+                        .strip_prefix("MD5:")
+                        .unwrap_or("");
+
+                    if local_fingerprint == *do_fingerprint {
+                        let private_key = pub_key_str
+                            .strip_suffix(".pub")
+                            .unwrap_or(&pub_key_str)
+                            .to_string();
+                        eprintln!(
+                            "SSH key: {private_key} \
+                             (ID: {key_id})"
+                        );
+                        matched.push((key_id.to_string(), private_key));
+                        break;
+                    }
                 }
             }
         }
 
-        Err(DeployError::PrerequisiteMissing(format!(
-            "no local key matches DO fingerprint \
-             {do_fingerprint}"
-        )))
+        if matched.is_empty() {
+            let fps: Vec<&str> = do_keys.iter().map(|(_, fp)| *fp).collect();
+            return Err(DeployError::PrerequisiteMissing(format!(
+                "no local key matches any DO \
+                     fingerprint: {}",
+                fps.join(", ")
+            )));
+        }
+
+        Ok(matched)
     }
 
     fn get_droplet_ip(name: &str) -> DeployResult<String> {
@@ -175,17 +191,19 @@ impl Provisioner for DigitalOcean {
         Ok(())
     }
 
-    fn detect_ssh_key(&self) -> DeployResult<(String, String)> {
-        Self::detect_do_ssh_key()
+    fn detect_ssh_keys(&self) -> DeployResult<Vec<(String, String)>> {
+        Self::detect_do_ssh_keys()
     }
 
     fn create_server(
         &self,
         name: &str,
         region: &str,
-        ssh_key_id: &str,
+        ssh_key_ids: &[String],
     ) -> DeployResult<ServerInfo> {
         eprintln!("Creating droplet '{name}' in {region}...");
+
+        let ids_csv = ssh_key_ids.join(",");
 
         cmd::run_interactive(
             "doctl",
@@ -201,7 +219,7 @@ impl Provisioner for DigitalOcean {
                 "--region",
                 region,
                 "--ssh-keys",
-                ssh_key_id,
+                &ids_csv,
                 "--enable-monitoring",
                 "--wait",
             ],
@@ -210,22 +228,21 @@ impl Provisioner for DigitalOcean {
         let ip = Self::get_droplet_ip(name)?;
         eprintln!("Droplet created! IP: {ip}");
 
-        // We need to find the SSH key file again for the
-        // ServerInfo - detect_ssh_key provides both id and
-        // file.
-        let (_, key_file) = Self::detect_do_ssh_key()?;
+        let keys = Self::detect_do_ssh_keys()?;
+        let (ids, files): (Vec<_>, Vec<_>) = keys.into_iter().unzip();
 
         Ok(ServerInfo {
             name: name.to_string(),
             ip,
             region: region.to_string(),
-            ssh_key_id: ssh_key_id.to_string(),
-            ssh_key_file: key_file,
+            ssh_key_ids: ids,
+            ssh_key_files: files,
         })
     }
 
     fn setup_server(&self, server: &ServerInfo, domain: Option<&str>) -> DeployResult<()> {
-        let ssh = SshSession::new(&server.ip, "root").with_key(&server.ssh_key_file);
+        SshSession::clear_known_host(&server.ip);
+        let ssh = SshSession::new(&server.ip, "root").with_keys(&server.ssh_key_files);
 
         ssh.wait_for_ready(30, std::time::Duration::from_secs(10))?;
 
@@ -234,9 +251,10 @@ impl Provisioner for DigitalOcean {
 
         Self::run_setup_script(&ssh, domain_str, remote_dir)?;
 
-        // Setup SSH config
+        // Setup SSH config (use first key for the config entry)
         let host_alias = domain.unwrap_or(&server.name);
-        super::setup_ssh_config(&server.ip, host_alias, &server.ssh_key_file)?;
+        let first_key = server.ssh_key_files.first().map_or("", String::as_str);
+        super::setup_ssh_config(&server.ip, host_alias, first_key)?;
 
         eprintln!();
         eprintln!("========================================");
@@ -275,13 +293,14 @@ impl Provisioner for DigitalOcean {
         for line in output.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 3 && parts[0] == name {
-                let (_, key_file) = Self::detect_do_ssh_key()?;
+                let keys = Self::detect_do_ssh_keys()?;
+                let (ids, files): (Vec<_>, Vec<_>) = keys.into_iter().unzip();
                 return Ok(Some(ServerInfo {
                     name: name.to_string(),
                     ip: parts[1].to_string(),
                     region: parts[2].to_string(),
-                    ssh_key_id: String::new(),
-                    ssh_key_file: key_file,
+                    ssh_key_ids: ids,
+                    ssh_key_files: files,
                 }));
             }
         }

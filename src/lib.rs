@@ -496,6 +496,7 @@ pub use app::App;
 pub use app::Upstream;
 pub use caddy::Caddy;
 pub use deploy::docker_save::DockerSaveLoad;
+pub use deploy::local::LocalDeploy;
 pub use dns::cloudflare::Cloudflare;
 pub use dns::ovh::Ovh;
 pub use dns::ovh::OvhCredentials;

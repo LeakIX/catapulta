@@ -30,6 +30,7 @@ pub struct Caddy {
     pub routes: Vec<(String, Upstream)>,
     pub gzip: bool,
     pub security_headers: bool,
+    pub tls_internal: bool,
     pub extra_directives: Vec<String>,
     /// Custom volumes to mount into the Caddy container.
     /// Each entry is `(host_path_or_name, container_path)`.
@@ -68,6 +69,14 @@ impl Caddy {
     #[must_use]
     pub const fn security_headers(mut self) -> Self {
         self.security_headers = true;
+        self
+    }
+
+    /// Use `tls internal` (Caddy self-signed CA) instead of
+    /// ACME. Useful for local development.
+    #[must_use]
+    pub const fn tls_internal(mut self) -> Self {
+        self.tls_internal = true;
         self
     }
 

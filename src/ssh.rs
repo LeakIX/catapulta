@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
@@ -9,7 +10,7 @@ use crate::error::{DeployError, DeployResult};
 pub struct SshSession {
     host: String,
     user: String,
-    key: Option<String>,
+    keys: Vec<String>,
 }
 
 impl SshSession {
@@ -18,14 +19,36 @@ impl SshSession {
         Self {
             host: host.to_string(),
             user: user.to_string(),
-            key: None,
+            keys: Vec::new(),
         }
     }
 
     #[must_use]
     pub fn with_key(mut self, key_path: &str) -> Self {
-        self.key = Some(key_path.to_string());
+        self.keys.push(key_path.to_string());
         self
+    }
+
+    #[must_use]
+    pub fn with_keys(mut self, key_paths: &[String]) -> Self {
+        self.keys.extend_from_slice(key_paths);
+        self
+    }
+
+    /// Remove stale host key entries from `known_hosts`.
+    ///
+    /// This prevents "host key mismatch" errors when a server
+    /// is reprovisioned at the same IP address.
+    pub fn clear_known_host(host: &str) {
+        let Ok(home) = std::env::var("HOME") else {
+            return;
+        };
+        let known_hosts = PathBuf::from(&home).join(".ssh").join("known_hosts");
+        if !known_hosts.exists() {
+            return;
+        }
+        let kh = known_hosts.to_string_lossy().to_string();
+        let _ = cmd::run("ssh-keygen", &["-R", host, "-f", &kh]);
     }
 
     /// Execute a command on the remote host and capture output.
@@ -102,7 +125,7 @@ impl SshSession {
             "-o".to_string(),
             "ConnectTimeout=10".to_string(),
         ];
-        if let Some(key) = &self.key {
+        for key in &self.keys {
             args.push("-i".to_string());
             args.push(key.clone());
         }
@@ -114,7 +137,7 @@ impl SshSession {
             "-o".to_string(),
             "StrictHostKeyChecking=accept-new".to_string(),
         ];
-        if let Some(key) = &self.key {
+        for key in &self.keys {
             args.push("-i".to_string());
             args.push(key.clone());
         }

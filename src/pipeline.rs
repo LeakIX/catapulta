@@ -3,8 +3,10 @@ use clap::{Parser, Subcommand};
 use crate::app::App;
 use crate::caddy::Caddy;
 use crate::caddyfile;
+use crate::cmd;
 use crate::compose;
 use crate::deploy::Deployer;
+use crate::deploy::local::LocalDeploy;
 use crate::dns::DnsProvider;
 use crate::error::{DeployError, DeployResult};
 use crate::provision::Provisioner;
@@ -35,6 +37,7 @@ pub struct Pipeline {
     remote_dir: String,
     ssh_user: String,
     post_deploy: Vec<PostDeployHook>,
+    local_dir: String,
 }
 
 impl Pipeline {
@@ -50,6 +53,7 @@ impl Pipeline {
             remote_dir: "/opt/app".to_string(),
             ssh_user: "root".to_string(),
             post_deploy: Vec::new(),
+            local_dir: ".catapulta".to_string(),
         }
     }
 
@@ -66,6 +70,7 @@ impl Pipeline {
             remote_dir: "/opt/app".to_string(),
             ssh_user: "root".to_string(),
             post_deploy: Vec::new(),
+            local_dir: ".catapulta".to_string(),
         }
     }
 
@@ -140,6 +145,12 @@ impl Pipeline {
         self
     }
 
+    #[must_use]
+    pub fn local_dir(mut self, dir: &str) -> Self {
+        self.local_dir = dir.to_string();
+        self
+    }
+
     /// Parse CLI arguments and dispatch the appropriate
     /// command.
     ///
@@ -160,6 +171,13 @@ impl Pipeline {
                 skip_build,
                 dry_run,
             } => self.cmd_deploy(host, *skip_build, *dry_run),
+            Command::DeployLocal {
+                domain,
+                skip_build,
+                dry_run,
+            } => self.cmd_deploy_local(domain, *skip_build, *dry_run),
+            Command::LocalDown => self.cmd_local_down(),
+            Command::LocalStatus => self.cmd_local_status(),
             Command::Status { host } => self.cmd_status(host),
             Command::Destroy {
                 name,
@@ -195,14 +213,15 @@ impl Pipeline {
             return Ok(());
         }
 
-        // Detect SSH key
-        let (key_id, _) = provisioner.detect_ssh_key()?;
+        // Detect SSH keys
+        let keys = provisioner.detect_ssh_keys()?;
+        let key_ids: Vec<String> = keys.iter().map(|(id, _)| id.clone()).collect();
 
         let region = region.unwrap_or("fra1");
 
         // Setup DNS before server setup so the domain resolves
         // by the time Caddy requests a TLS certificate
-        let server = provisioner.create_server(name, region, &key_id)?;
+        let server = provisioner.create_server(name, region, &key_ids)?;
 
         if domain.is_some() {
             for dns in &self.dns {
@@ -326,6 +345,55 @@ impl Pipeline {
         Ok(())
     }
 
+    fn cmd_deploy_local(&self, domain: &str, skip_build: bool, dry_run: bool) -> DeployResult<()> {
+        if dry_run {
+            return self.cmd_deploy_local_dry_run(domain);
+        }
+
+        let deployer = LocalDeploy::new();
+
+        if !skip_build {
+            for app in &self.apps {
+                deployer.build_image(app)?;
+            }
+        }
+
+        // Stop existing local stack
+        let compose_path = format!("{}/docker-compose.yml", self.local_dir);
+        if std::path::Path::new(&compose_path).exists() {
+            eprintln!("Stopping existing local stack...");
+            let _ = run_local_compose(&self.local_dir, &["down"]);
+        }
+
+        deployer.deploy(domain, "", &self.apps, &self.caddy, &self.local_dir)?;
+
+        // Print dnsmasq setup hint if not detected
+        print_dnsmasq_hint();
+
+        Ok(())
+    }
+
+    fn cmd_local_down(&self) -> DeployResult<()> {
+        let compose_path = format!("{}/docker-compose.yml", self.local_dir);
+        if !std::path::Path::new(&compose_path).exists() {
+            eprintln!("No local stack found in {}/", self.local_dir);
+            return Ok(());
+        }
+
+        eprintln!("Stopping local stack...");
+        run_local_compose(&self.local_dir, &["down"])
+    }
+
+    fn cmd_local_status(&self) -> DeployResult<()> {
+        let compose_path = format!("{}/docker-compose.yml", self.local_dir);
+        if !std::path::Path::new(&compose_path).exists() {
+            eprintln!("No local stack found in {}/", self.local_dir);
+            return Ok(());
+        }
+
+        run_local_compose(&self.local_dir, &["ps"])
+    }
+
     #[allow(clippy::unnecessary_wraps)]
     fn cmd_deploy_dry_run(&self, host: &str) -> DeployResult<()> {
         let compose_content = compose::render(&self.apps, &self.caddy);
@@ -389,6 +457,48 @@ impl Pipeline {
         Ok(())
     }
 
+    #[allow(clippy::unnecessary_wraps)]
+    fn cmd_deploy_local_dry_run(&self, domain: &str) -> DeployResult<()> {
+        let compose_content = compose::render(&self.apps, &self.caddy);
+
+        let mut local_caddy = self.caddy.clone();
+        local_caddy.tls_internal = true;
+        let caddyfile_content = caddyfile::render(&local_caddy, domain);
+
+        eprintln!(
+            "=== Dry run (local): \
+             no changes will be made ==="
+        );
+        eprintln!();
+
+        eprintln!("--- docker-compose.yml ---");
+        println!("{compose_content}");
+
+        eprintln!("--- Caddyfile (tls internal) ---");
+        println!("{caddyfile_content}");
+
+        eprintln!("--- Actions that would be performed ---");
+        for (i, app) in self.apps.iter().enumerate() {
+            let n = i + 1;
+            eprintln!(
+                "{n}. Build Docker image (native): \
+                 {}:latest",
+                app.name
+            );
+        }
+        let mut step = self.apps.len() + 1;
+        eprintln!("{step}. Write config files to {}/", self.local_dir);
+        step += 1;
+        let has_env = self.apps.iter().any(|a| a.env_file.is_some());
+        if has_env {
+            eprintln!("{step}. Copy .env file(s)");
+            step += 1;
+        }
+        eprintln!("{step}. Start containers via docker compose");
+
+        Ok(())
+    }
+
     fn cmd_status(&self, host: &str) -> DeployResult<()> {
         let ssh = SshSession::new(host, &self.ssh_user);
         ssh.exec_interactive(&format!("cd {} && docker compose ps", self.remote_dir))
@@ -441,6 +551,49 @@ impl Pipeline {
     }
 }
 
+/// Run `docker compose` with an explicit project directory
+/// so relative paths and project naming stay consistent.
+fn run_local_compose(local_dir: &str, args: &[&str]) -> DeployResult<()> {
+    let compose_file = format!("{local_dir}/docker-compose.yml");
+    let mut full: Vec<&str> = vec![
+        "compose",
+        "--project-directory",
+        local_dir,
+        "-f",
+        &compose_file,
+    ];
+    full.extend_from_slice(args);
+    cmd::run_interactive("docker", &full)
+}
+
+/// Print a one-time dnsmasq setup guide when dnsmasq is not
+/// running.
+fn print_dnsmasq_hint() {
+    let running = cmd::run("brew", &["services", "list"])
+        .map(|out| out.contains("dnsmasq") && out.contains("started"))
+        .unwrap_or(false);
+
+    if running {
+        return;
+    }
+
+    eprintln!();
+    eprintln!("Local DNS not configured. One-time setup:");
+    eprintln!();
+    eprintln!("  brew install dnsmasq");
+    eprintln!("  echo 'address=/.local.dev/127.0.0.1' >> \\");
+    eprintln!("    /opt/homebrew/etc/dnsmasq.conf");
+    eprintln!("  sudo mkdir -p /etc/resolver");
+    eprintln!("  echo 'nameserver 127.0.0.1' | \\");
+    eprintln!("    sudo tee /etc/resolver/local.dev");
+    eprintln!("  brew services start dnsmasq");
+    eprintln!();
+    eprintln!(
+        "Then use domains like myapp.local.dev \
+         for local deploys."
+    );
+}
+
 #[derive(Parser)]
 #[command(name = "xtask")]
 #[command(about = "Deployment automation")]
@@ -478,6 +631,26 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Deploy locally for testing
+    DeployLocal {
+        /// Domain name for local access
+        domain: String,
+
+        /// Skip Docker image build
+        #[arg(long)]
+        skip_build: bool,
+
+        /// Preview generated files without executing
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Stop the local stack
+    LocalDown,
+
+    /// Show local container status
+    LocalStatus,
 
     /// Show container status on a remote server
     Status {

@@ -18,6 +18,10 @@ pub fn render(caddy: &Caddy, domain: &str) -> String {
         site = site.reverse_proxy(&upstream.to_string());
     }
 
+    if caddy.tls_internal {
+        site = site.directive(Directive::new("tls internal"));
+    }
+
     if caddy.gzip {
         site = site.encode_gzip();
     }

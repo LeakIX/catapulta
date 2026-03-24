@@ -308,15 +308,15 @@ impl Provisioner for Libvirt {
         Ok(())
     }
 
-    fn detect_ssh_key(&self) -> DeployResult<(String, String)> {
-        Ok((String::new(), self.vm_ssh_key.clone()))
+    fn detect_ssh_keys(&self) -> DeployResult<Vec<(String, String)>> {
+        Ok(vec![(String::new(), self.vm_ssh_key.clone())])
     }
 
     fn create_server(
         &self,
         name: &str,
         _region: &str,
-        _ssh_key_id: &str,
+        _ssh_key_ids: &[String],
     ) -> DeployResult<ServerInfo> {
         let ssh = self.hypervisor_ssh();
         let disk_path = format!("{}/{name}.qcow2", self.storage_dir);
@@ -366,14 +366,15 @@ impl Provisioner for Libvirt {
             name: name.to_string(),
             ip,
             region: "local".to_string(),
-            ssh_key_id: String::new(),
-            ssh_key_file: self.vm_ssh_key.clone(),
+            ssh_key_ids: Vec::new(),
+            ssh_key_files: vec![self.vm_ssh_key.clone()],
         })
     }
 
     fn setup_server(&self, server: &ServerInfo, domain: Option<&str>) -> DeployResult<()> {
         // SSH to the VM itself, not the hypervisor
-        let ssh = SshSession::new(&server.ip, "root").with_key(&server.ssh_key_file);
+        SshSession::clear_known_host(&server.ip);
+        let ssh = SshSession::new(&server.ip, "root").with_keys(&server.ssh_key_files);
 
         ssh.wait_for_ready(30, std::time::Duration::from_secs(10))?;
 
@@ -382,9 +383,10 @@ impl Provisioner for Libvirt {
 
         Self::run_setup_script(&ssh, domain_str, remote_dir)?;
 
-        // Setup SSH config
+        // Setup SSH config (use first key for the config entry)
         let host_alias = domain.unwrap_or(&server.name);
-        super::setup_ssh_config(&server.ip, host_alias, &server.ssh_key_file)?;
+        let first_key = server.ssh_key_files.first().map_or("", String::as_str);
+        super::setup_ssh_config(&server.ip, host_alias, first_key)?;
 
         eprintln!();
         eprintln!("========================================");
@@ -426,8 +428,8 @@ impl Provisioner for Libvirt {
                         name: name.to_string(),
                         ip,
                         region: "local".to_string(),
-                        ssh_key_id: String::new(),
-                        ssh_key_file: self.vm_ssh_key.clone(),
+                        ssh_key_ids: Vec::new(),
+                        ssh_key_files: vec![self.vm_ssh_key.clone()],
                     }));
                 }
             }
@@ -440,8 +442,8 @@ impl Provisioner for Libvirt {
                         name: name.to_string(),
                         ip,
                         region: "local".to_string(),
-                        ssh_key_id: String::new(),
-                        ssh_key_file: self.vm_ssh_key.clone(),
+                        ssh_key_ids: Vec::new(),
+                        ssh_key_files: vec![self.vm_ssh_key.clone()],
                     }));
                 }
             }
@@ -453,8 +455,8 @@ impl Provisioner for Libvirt {
             name: name.to_string(),
             ip: String::new(),
             region: "local".to_string(),
-            ssh_key_id: String::new(),
-            ssh_key_file: self.vm_ssh_key.clone(),
+            ssh_key_ids: Vec::new(),
+            ssh_key_files: vec![self.vm_ssh_key.clone()],
         }))
     }
 
