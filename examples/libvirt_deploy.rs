@@ -20,7 +20,7 @@
 //! cargo xtask deploy app.homelab.local
 //!
 //! # Tear everything down
-//! cargo xtask destroy my-app --domain app.homelab.local
+//! cargo xtask destroy my-app
 //! ```
 
 use catapulta::{App, Caddy, DockerSaveLoad, Libvirt, NetworkMode, Pipeline};

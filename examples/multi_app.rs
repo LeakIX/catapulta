@@ -14,7 +14,7 @@
 //! cargo xtask deploy project.example.com --dry-run
 //!
 //! # Tear everything down
-//! cargo xtask destroy my-project --domain project.example.com
+//! cargo xtask destroy my-project
 //! ```
 
 use catapulta::{App, Caddy, DigitalOcean, DockerSaveLoad, Ovh, Pipeline};

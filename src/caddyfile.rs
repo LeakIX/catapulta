@@ -45,13 +45,12 @@ pub fn render(caddy: &Caddy, domain: &str) -> String {
 /// Add `handle_errors` block that serves a user-provided
 /// maintenance page on 502, 503, and 504 errors.
 fn add_maintenance_page(site: SiteBlock, path: &str) -> SiteBlock {
-    let html =
-        std::fs::read_to_string(path).unwrap_or_else(|e| {
-            panic!(
-                "failed to read maintenance page at \
+    let html = std::fs::read_to_string(path).unwrap_or_else(|e| {
+        panic!(
+            "failed to read maintenance page at \
                  '{path}': {e}"
-            )
-        });
+        )
+    });
 
     // Caddy heredocs require consistent leading whitespace.
     // The HTML content has no indentation, so the closing

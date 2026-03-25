@@ -59,10 +59,7 @@ fn caddy_service(apps: &[App], caddy: &Caddy, network_name: &str) -> Service {
     if caddy.maintenance_page.is_none() {
         for app in apps {
             if proxied_names.contains(&app.name.as_str()) {
-                depends.insert(
-                    app.name.clone(),
-                    DependsCondition::service_healthy(),
-                );
+                depends.insert(app.name.clone(), DependsCondition::service_healthy());
             }
         }
     }

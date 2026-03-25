@@ -12,7 +12,7 @@
 //! cargo xtask deploy app.example.com
 //!
 //! # Tear everything down
-//! cargo xtask destroy my-app --domain app.example.com
+//! cargo xtask destroy my-app
 //! ```
 
 use catapulta::{App, Caddy, DigitalOcean, DockerSaveLoad, Ovh, Pipeline};

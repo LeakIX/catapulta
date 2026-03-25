@@ -179,11 +179,7 @@ impl Pipeline {
             Command::LocalDown => self.cmd_local_down(),
             Command::LocalStatus => self.cmd_local_status(),
             Command::Status { host } => self.cmd_status(host),
-            Command::Destroy {
-                name,
-                domain,
-                force,
-            } => self.cmd_destroy(name, domain.as_deref(), *force),
+            Command::Destroy { name, force } => self.cmd_destroy(name, *force),
         }
     }
 
@@ -207,6 +203,17 @@ impl Pipeline {
                  (IP: {})",
                 existing.ip
             );
+
+            // Update DNS to point at the current IP
+            if domain.is_some() {
+                for dns in &self.dns {
+                    let d = dns.domain();
+                    eprintln!("Updating DNS for {d}...");
+                    dns.upsert_a_record(&existing.ip)?;
+                    eprintln!("DNS record set: {d} -> {}", existing.ip);
+                }
+            }
+
             let host = domain.unwrap_or(&existing.ip);
             eprintln!("Deploy with:");
             eprintln!("  cargo xtask deploy {host}");
@@ -263,8 +270,7 @@ impl Pipeline {
         if self.caddy.maintenance_page.is_some() {
             // First, deploy updated Caddyfile with handle_errors
             // so Caddy can serve the maintenance page.
-            let caddyfile_content =
-                caddyfile::render(&self.caddy, host);
+            let caddyfile_content = caddyfile::render(&self.caddy, host);
             ssh.write_remote_file(
                 &caddyfile_content,
                 &format!("{}/Caddyfile", self.remote_dir),
@@ -277,8 +283,7 @@ impl Pipeline {
                 self.remote_dir,
             ))?;
             // Only stop app containers, keep Caddy running
-            let app_names: Vec<&str> =
-                self.apps.iter().map(|a| a.name.as_str()).collect();
+            let app_names: Vec<&str> = self.apps.iter().map(|a| a.name.as_str()).collect();
             let names = app_names.join(" ");
             ssh.exec(&format!(
                 "cd {} && docker compose rm -sf {} \
@@ -504,7 +509,7 @@ impl Pipeline {
         ssh.exec_interactive(&format!("cd {} && docker compose ps", self.remote_dir))
     }
 
-    fn cmd_destroy(&self, name: &str, domain: Option<&str>, force: bool) -> DeployResult<()> {
+    fn cmd_destroy(&self, name: &str, force: bool) -> DeployResult<()> {
         let provisioner = self
             .provisioner
             .as_ref()
@@ -515,7 +520,7 @@ impl Pipeline {
             "WARNING: This will permanently delete \
              droplet '{name}'"
         );
-        if domain.is_some() {
+        if !self.dns.is_empty() {
             for dns in &self.dns {
                 eprintln!("and DNS record for {}", dns.domain());
             }
@@ -536,12 +541,10 @@ impl Pipeline {
         provisioner.destroy_server(name)?;
 
         // Remove DNS records
-        if domain.is_some() {
-            for dns in &self.dns {
-                let d = dns.domain();
-                eprintln!("Removing DNS record for {d}...");
-                dns.delete_a_record()?;
-            }
+        for dns in &self.dns {
+            let d = dns.domain();
+            eprintln!("Removing DNS record for {d}...");
+            dns.delete_a_record()?;
         }
 
         eprintln!();
@@ -662,10 +665,6 @@ enum Command {
     Destroy {
         /// Server name
         name: String,
-
-        /// Domain record to remove
-        #[arg(long)]
-        domain: Option<String>,
 
         /// Skip interactive confirmation prompt
         #[arg(long)]

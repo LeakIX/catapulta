@@ -86,7 +86,7 @@
 //! cargo xtask deploy my-service.example.com --dry-run
 //!
 //! # Tear everything down
-//! cargo xtask destroy my-service --domain my-service.example.com
+//! cargo xtask destroy my-service
 //! ```
 //!
 //! ## Multi-app deployment
