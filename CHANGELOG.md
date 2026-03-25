@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-03-25
+
+### Added
+
+- Maintenance page support during deployment: Caddy serves a custom HTML
+  page on 502/503/504 while app containers restart ([aa64e79], [#25])
+- `Caddy::maintenance_page()` builder method to set the maintenance HTML
+  file path ([aa64e79], [#25])
+- `Pipeline::deploy_local()` deployer for local Docker Compose testing
+  without a remote server ([9ca80e5])
+- `deploy-local`, `local-down`, and `local-status` CLI subcommands for
+  managing local stacks ([9ca80e5])
+- Support for multiple SSH keys per server, detected automatically from
+  the cloud provider ([9ca80e5])
+
+### Fixed
+
+- Provision now updates DNS A records when the droplet already exists,
+  fixing stale DNS after re-provisioning ([91ac170], [#26])
+- Heredoc indentation in maintenance page Caddyfile rendering
+  ([a45ba9e], [65ed389])
+
+### Changed
+
+- `destroy` command now always removes DNS records from all configured
+  providers; the `--domain` CLI flag has been removed ([91ac170], [#26])
+- Bump clap from 4.5.60 to 4.6.0 ([ad32c4c], [#24])
+
 ## [0.8.0] - 2026-03-12
 
 ### Added
@@ -164,6 +192,12 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[91ac170]: https://github.com/LeakIX/catapulta/commit/91ac170
+[9ca80e5]: https://github.com/LeakIX/catapulta/commit/9ca80e5
+[a45ba9e]: https://github.com/LeakIX/catapulta/commit/a45ba9e
+[65ed389]: https://github.com/LeakIX/catapulta/commit/65ed389
+[aa64e79]: https://github.com/LeakIX/catapulta/commit/aa64e79
+[ad32c4c]: https://github.com/LeakIX/catapulta/commit/ad32c4c
 [52002c9]: https://github.com/LeakIX/catapulta/commit/52002c9
 [5d24673]: https://github.com/LeakIX/catapulta/commit/5d24673
 [57b9014]: https://github.com/LeakIX/catapulta/commit/57b9014
@@ -190,6 +224,9 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#26]: https://github.com/LeakIX/catapulta/issues/26
+[#25]: https://github.com/LeakIX/catapulta/issues/25
+[#24]: https://github.com/LeakIX/catapulta/issues/24
 [#22]: https://github.com/LeakIX/catapulta/issues/22
 [#13]: https://github.com/LeakIX/catapulta/issues/13
 [#12]: https://github.com/LeakIX/catapulta/issues/12
@@ -203,6 +240,7 @@ All notable changes to this project will be documented in this file.
 [#4]: https://github.com/LeakIX/catapulta/issues/4
 
 <!-- Release links -->
+[0.9.0]: https://github.com/LeakIX/catapulta/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/LeakIX/catapulta/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/LeakIX/catapulta/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/LeakIX/catapulta/compare/v0.5.0...v0.6.0
