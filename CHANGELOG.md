@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-03-25
+
+### Added
+
+- `--only` flag on `deploy` and `deploy-local` commands to selectively build,
+  transfer, and restart individual services without touching the rest of the
+  stack ([586989e], [#27])
+
 ## [0.9.0] - 2026-03-25
 
 ### Added
@@ -192,6 +200,7 @@ All notable changes to this project will be documented in this file.
 - `provision`, `deploy`, `destroy` CLI subcommands
 
 <!-- Commit links -->
+[586989e]: https://github.com/LeakIX/catapulta/commit/586989e
 [91ac170]: https://github.com/LeakIX/catapulta/commit/91ac170
 [9ca80e5]: https://github.com/LeakIX/catapulta/commit/9ca80e5
 [a45ba9e]: https://github.com/LeakIX/catapulta/commit/a45ba9e
@@ -224,6 +233,7 @@ All notable changes to this project will be documented in this file.
 [837af24]: https://github.com/LeakIX/catapulta/commit/837af24
 
 <!-- PR/Issue links -->
+[#27]: https://github.com/LeakIX/catapulta/issues/27
 [#26]: https://github.com/LeakIX/catapulta/issues/26
 [#25]: https://github.com/LeakIX/catapulta/issues/25
 [#24]: https://github.com/LeakIX/catapulta/issues/24
@@ -240,6 +250,7 @@ All notable changes to this project will be documented in this file.
 [#4]: https://github.com/LeakIX/catapulta/issues/4
 
 <!-- Release links -->
+[0.10.0]: https://github.com/LeakIX/catapulta/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/LeakIX/catapulta/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/LeakIX/catapulta/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/LeakIX/catapulta/compare/v0.6.0...v0.7.0
