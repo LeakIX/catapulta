@@ -118,7 +118,15 @@ impl Deployer for LocalDeploy {
         apps: &[App],
         caddy: &Caddy,
         local_dir: &str,
+        only: &[String],
     ) -> DeployResult<()> {
+        // Filter apps for env copy when --only is set
+        let env_apps: Vec<&App> = if only.is_empty() {
+            apps.iter().collect()
+        } else {
+            apps.iter().filter(|a| only.contains(&a.name)).collect()
+        };
+
         check_env_files(apps)?;
 
         eprintln!("Deploying locally to {local_dir}/...");
@@ -126,7 +134,7 @@ impl Deployer for LocalDeploy {
         // Create local directory
         fs::create_dir_all(local_dir)?;
 
-        // Generate config files with tls internal
+        // Generate config files with tls internal (always full)
         let mut local_caddy = caddy.clone();
         local_caddy.tls_internal = true;
         let caddyfile_content = caddyfile::render(&local_caddy, host);
@@ -137,8 +145,8 @@ impl Deployer for LocalDeploy {
         fs::write(format!("{local_dir}/docker-compose.yml"), &compose_content)?;
         fs::write(format!("{local_dir}/Caddyfile"), &caddyfile_content)?;
 
-        // Copy .env files
-        for app in apps {
+        // Copy .env files (only selected apps)
+        for app in &env_apps {
             if let Some(env_file) = &app.env_file {
                 let local_name = if apps.len() > 1 {
                     format!("{local_dir}/.env.{}", app.name)
@@ -151,10 +159,18 @@ impl Deployer for LocalDeploy {
 
         // Start containers
         eprintln!("Starting containers...");
-        run_compose(local_dir, &["up", "-d"])?;
+        if only.is_empty() {
+            run_compose(local_dir, &["up", "-d"])?;
+        } else {
+            let mut args: Vec<&str> = vec!["up", "-d"];
+            let names: Vec<&str> = only.iter().map(String::as_str).collect();
+            args.extend(&names);
+            run_compose(local_dir, &args)?;
+        }
 
-        // Wait for health via local docker inspect
-        wait_healthy(apps, |name| {
+        // Wait for health (only selected apps)
+        let health_apps: Vec<App> = env_apps.iter().copied().cloned().collect();
+        wait_healthy(&health_apps, |name| {
             cmd::run(
                 "docker",
                 &["inspect", "--format={{.State.Health.Status}}", name],

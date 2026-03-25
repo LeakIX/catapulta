@@ -20,6 +20,11 @@ pub trait Deployer {
     fn transfer_image(&self, app: &App, host: &str, user: &str) -> DeployResult<()>;
 
     /// Deploy the full stack to the remote host.
+    ///
+    /// When `only` is non-empty, only transfer `.env` files for
+    /// the listed services and restart only those services.
+    /// Config files (docker-compose.yml, Caddyfile) are always
+    /// written in full.
     fn deploy(
         &self,
         host: &str,
@@ -27,6 +32,7 @@ pub trait Deployer {
         apps: &[App],
         caddy: &Caddy,
         remote_dir: &str,
+        only: &[String],
     ) -> DeployResult<()>;
 }
 

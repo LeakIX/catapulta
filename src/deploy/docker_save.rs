@@ -146,14 +146,22 @@ impl Deployer for DockerSaveLoad {
         apps: &[App],
         caddy: &Caddy,
         remote_dir: &str,
+        only: &[String],
     ) -> DeployResult<()> {
+        // Filter apps for env transfer when --only is set
+        let env_apps: Vec<&App> = if only.is_empty() {
+            apps.iter().collect()
+        } else {
+            apps.iter().filter(|a| only.contains(&a.name)).collect()
+        };
+
         check_env_files(apps)?;
 
         eprintln!("Deploying to {user}@{host}...");
 
         let ssh = SshSession::new(host, user);
 
-        // Generate config files
+        // Generate config files (always full stack)
         let caddyfile_content = caddyfile::render(caddy, host);
         let compose_content = compose::render(apps, caddy);
 
@@ -165,8 +173,8 @@ impl Deployer for DockerSaveLoad {
         )?;
         ssh.write_remote_file(&caddyfile_content, &format!("{remote_dir}/Caddyfile"))?;
 
-        // Transfer .env files for each app
-        for app in apps {
+        // Transfer .env files (only selected apps)
+        for app in &env_apps {
             if let Some(env_file) = &app.env_file {
                 let remote_name = if apps.len() > 1 {
                     format!("{remote_dir}/.env.{}", app.name)
@@ -178,18 +186,27 @@ impl Deployer for DockerSaveLoad {
             }
         }
 
-        // Start containers with new images
+        // Start containers
         eprintln!("Starting containers...");
-        ssh.exec_interactive(&format!("cd {remote_dir} && docker compose up -d"))?;
+        if only.is_empty() {
+            ssh.exec_interactive(&format!("cd {remote_dir} && docker compose up -d"))?;
+        } else {
+            let names = only.join(" ");
+            ssh.exec_interactive(&format!(
+                "cd {remote_dir} && \
+                 docker compose up -d {names}"
+            ))?;
+        }
 
-        // Wait for health
+        // Wait for health (only selected apps)
+        let health_apps: Vec<App> = env_apps.iter().map(|a| (*a).clone()).collect();
         let rd = remote_dir.to_string();
-        wait_healthy(apps, |name| {
+        wait_healthy(&health_apps, |name| {
             ssh.exec(&format!(
                 "cd {rd} && \
-                 docker inspect \
-                 --format='{{{{.State.Health.Status}}}}' \
-                 {name}"
+                     docker inspect \
+                     --format='{{{{.State.Health.Status}}}}' \
+                     {name}"
             ))
         })?;
 

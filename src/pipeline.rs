@@ -151,6 +151,34 @@ impl Pipeline {
         self
     }
 
+    /// Validate that all `--only` names match configured apps.
+    fn validate_only(&self, only: &[String]) -> DeployResult<()> {
+        for name in only {
+            if !self.apps.iter().any(|a| a.name == *name) {
+                let known: Vec<&str> = self.apps.iter().map(|a| a.name.as_str()).collect();
+                return Err(DeployError::Other(format!(
+                    "unknown service '{}'. \
+                     Known services: {}",
+                    name,
+                    known.join(", ")
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Return apps filtered by `--only`, or all apps when empty.
+    fn selected_apps(&self, only: &[String]) -> Vec<&App> {
+        if only.is_empty() {
+            self.apps.iter().collect()
+        } else {
+            self.apps
+                .iter()
+                .filter(|a| only.contains(&a.name))
+                .collect()
+        }
+    }
+
     /// Parse CLI arguments and dispatch the appropriate
     /// command.
     ///
@@ -170,12 +198,14 @@ impl Pipeline {
                 host,
                 skip_build,
                 dry_run,
-            } => self.cmd_deploy(host, *skip_build, *dry_run),
+                only,
+            } => self.cmd_deploy(host, *skip_build, *dry_run, only),
             Command::DeployLocal {
                 domain,
                 skip_build,
                 dry_run,
-            } => self.cmd_deploy_local(domain, *skip_build, *dry_run),
+                only,
+            } => self.cmd_deploy_local(domain, *skip_build, *dry_run, only),
             Command::LocalDown => self.cmd_local_down(),
             Command::LocalStatus => self.cmd_local_status(),
             Command::Status { host } => self.cmd_status(host),
@@ -244,9 +274,15 @@ impl Pipeline {
         Ok(())
     }
 
-    fn cmd_deploy(&self, host: &str, skip_build: bool, dry_run: bool) -> DeployResult<()> {
+    fn cmd_deploy(
+        &self,
+        host: &str,
+        skip_build: bool,
+        dry_run: bool,
+        only: &[String],
+    ) -> DeployResult<()> {
         if dry_run {
-            return self.cmd_deploy_dry_run(host);
+            return self.cmd_deploy_dry_run(host, only);
         }
 
         let deployer = self
@@ -254,8 +290,14 @@ impl Pipeline {
             .as_ref()
             .ok_or_else(|| DeployError::Other("no deployer configured".into()))?;
 
+        // Validate --only names against configured apps
+        self.validate_only(only)?;
+
+        // Select which apps to build/transfer
+        let selected = self.selected_apps(only);
+
         if !skip_build {
-            for app in &self.apps {
+            for app in &selected {
                 deployer.build_image(app)?;
             }
         }
@@ -282,23 +324,32 @@ impl Pipeline {
                  2>/dev/null || true",
                 self.remote_dir,
             ))?;
-            // Only stop app containers, keep Caddy running
-            let app_names: Vec<&str> = self.apps.iter().map(|a| a.name.as_str()).collect();
-            let names = app_names.join(" ");
+            // Only stop selected app containers, keep Caddy
+            let stop_names: Vec<&str> = selected.iter().map(|a| a.name.as_str()).collect();
+            let names = stop_names.join(" ");
             ssh.exec(&format!(
                 "cd {} && docker compose rm -sf {} \
                  2>/dev/null || true",
                 self.remote_dir, names,
             ))?;
-        } else {
+        } else if only.is_empty() {
             ssh.exec(&format!(
                 "cd {} && docker compose down \
                  2>/dev/null || true",
                 self.remote_dir
             ))?;
+        } else {
+            // Only stop selected services
+            let stop_names: Vec<&str> = selected.iter().map(|a| a.name.as_str()).collect();
+            let names = stop_names.join(" ");
+            ssh.exec(&format!(
+                "cd {} && docker compose rm -sf {} \
+                 2>/dev/null || true",
+                self.remote_dir, names,
+            ))?;
         }
 
-        for app in &self.apps {
+        for app in &selected {
             deployer.transfer_image(app, host, &self.ssh_user)?;
         }
 
@@ -308,6 +359,7 @@ impl Pipeline {
             &self.apps,
             &self.caddy,
             &self.remote_dir,
+            only,
         )?;
 
         if !self.post_deploy.is_empty() {
@@ -350,15 +402,25 @@ impl Pipeline {
         Ok(())
     }
 
-    fn cmd_deploy_local(&self, domain: &str, skip_build: bool, dry_run: bool) -> DeployResult<()> {
+    fn cmd_deploy_local(
+        &self,
+        domain: &str,
+        skip_build: bool,
+        dry_run: bool,
+        only: &[String],
+    ) -> DeployResult<()> {
         if dry_run {
-            return self.cmd_deploy_local_dry_run(domain);
+            return self.cmd_deploy_local_dry_run(domain, only);
         }
 
+        // Validate --only names against configured apps
+        self.validate_only(only)?;
+
+        let selected = self.selected_apps(only);
         let deployer = LocalDeploy::new();
 
         if !skip_build {
-            for app in &self.apps {
+            for app in &selected {
                 deployer.build_image(app)?;
             }
         }
@@ -366,11 +428,20 @@ impl Pipeline {
         // Stop existing local stack
         let compose_path = format!("{}/docker-compose.yml", self.local_dir);
         if std::path::Path::new(&compose_path).exists() {
-            eprintln!("Stopping existing local stack...");
-            let _ = run_local_compose(&self.local_dir, &["down"]);
+            if only.is_empty() {
+                eprintln!("Stopping existing local stack...");
+                let _ = run_local_compose(&self.local_dir, &["down"]);
+            } else {
+                let names: Vec<&str> = selected.iter().map(|a| a.name.as_str()).collect();
+                let name_strs = names.join(" ");
+                eprintln!("Stopping selected services: {name_strs}...");
+                let mut args = vec!["rm", "-sf"];
+                args.extend(names);
+                let _ = run_local_compose(&self.local_dir, &args);
+            }
         }
 
-        deployer.deploy(domain, "", &self.apps, &self.caddy, &self.local_dir)?;
+        deployer.deploy(domain, "", &self.apps, &self.caddy, &self.local_dir, only)?;
 
         // Print dnsmasq setup hint if not detected
         print_dnsmasq_hint();
@@ -400,11 +471,17 @@ impl Pipeline {
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    fn cmd_deploy_dry_run(&self, host: &str) -> DeployResult<()> {
+    fn cmd_deploy_dry_run(&self, host: &str, only: &[String]) -> DeployResult<()> {
+        self.validate_only(only)?;
+        let selected = self.selected_apps(only);
+
         let compose_content = compose::render(&self.apps, &self.caddy);
         let caddyfile_content = caddyfile::render(&self.caddy, host);
 
         eprintln!("=== Dry run: no changes will be made ===");
+        if !only.is_empty() {
+            eprintln!("  (--only: {})", only.join(", "));
+        }
         eprintln!();
 
         eprintln!("--- docker-compose.yml ---");
@@ -414,24 +491,28 @@ impl Pipeline {
         println!("{caddyfile_content}");
 
         eprintln!("--- Actions that would be performed ---");
-        for (i, app) in self.apps.iter().enumerate() {
+        for (i, app) in selected.iter().enumerate() {
             let n = i + 1;
             eprintln!("{n}. Build Docker image: {}:latest", app.name);
         }
-        let base = self.apps.len();
-        for (i, app) in self.apps.iter().enumerate() {
+        let base = selected.len();
+        for (i, app) in selected.iter().enumerate() {
             let n = base + i + 1;
             eprintln!("{n}. Transfer {} to {}@{}", app.name, self.ssh_user, host);
         }
         let mut step = base * 2 + 1;
         eprintln!("{step}. Write config files to {}/", self.remote_dir);
         step += 1;
-        let has_env = self.apps.iter().any(|a| a.env_file.is_some());
+        let has_env = selected.iter().any(|a| a.env_file.is_some());
         if has_env {
             eprintln!("{step}. Transfer .env file(s)");
             step += 1;
         }
-        eprintln!("{step}. Restart containers via docker compose");
+        if only.is_empty() {
+            eprintln!("{step}. Restart containers via docker compose");
+        } else {
+            eprintln!("{step}. Restart services: {}", only.join(", "));
+        }
 
         if !self.post_deploy.is_empty() {
             eprintln!();
@@ -463,7 +544,10 @@ impl Pipeline {
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    fn cmd_deploy_local_dry_run(&self, domain: &str) -> DeployResult<()> {
+    fn cmd_deploy_local_dry_run(&self, domain: &str, only: &[String]) -> DeployResult<()> {
+        self.validate_only(only)?;
+        let selected = self.selected_apps(only);
+
         let compose_content = compose::render(&self.apps, &self.caddy);
 
         let mut local_caddy = self.caddy.clone();
@@ -474,6 +558,9 @@ impl Pipeline {
             "=== Dry run (local): \
              no changes will be made ==="
         );
+        if !only.is_empty() {
+            eprintln!("  (--only: {})", only.join(", "));
+        }
         eprintln!();
 
         eprintln!("--- docker-compose.yml ---");
@@ -483,7 +570,7 @@ impl Pipeline {
         println!("{caddyfile_content}");
 
         eprintln!("--- Actions that would be performed ---");
-        for (i, app) in self.apps.iter().enumerate() {
+        for (i, app) in selected.iter().enumerate() {
             let n = i + 1;
             eprintln!(
                 "{n}. Build Docker image (native): \
@@ -491,15 +578,19 @@ impl Pipeline {
                 app.name
             );
         }
-        let mut step = self.apps.len() + 1;
+        let mut step = selected.len() + 1;
         eprintln!("{step}. Write config files to {}/", self.local_dir);
         step += 1;
-        let has_env = self.apps.iter().any(|a| a.env_file.is_some());
+        let has_env = selected.iter().any(|a| a.env_file.is_some());
         if has_env {
             eprintln!("{step}. Copy .env file(s)");
             step += 1;
         }
-        eprintln!("{step}. Start containers via docker compose");
+        if only.is_empty() {
+            eprintln!("{step}. Start containers via docker compose");
+        } else {
+            eprintln!("{step}. Start services: {}", only.join(", "));
+        }
 
         Ok(())
     }
@@ -633,6 +724,10 @@ enum Command {
         /// Preview generated files without executing
         #[arg(long)]
         dry_run: bool,
+
+        /// Deploy only the listed services (repeatable)
+        #[arg(long)]
+        only: Vec<String>,
     },
 
     /// Deploy locally for testing
@@ -647,6 +742,10 @@ enum Command {
         /// Preview generated files without executing
         #[arg(long)]
         dry_run: bool,
+
+        /// Deploy only the listed services (repeatable)
+        #[arg(long)]
+        only: Vec<String>,
     },
 
     /// Stop the local stack
