@@ -114,7 +114,7 @@ dependencies = [
 
 [[package]]
 name = "catapulta"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "caddyfile-rs",
@@ -364,9 +364,9 @@ dependencies = [
 
 [[package]]
 name = "docker-compose-types"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7edb75a85449fd9c34d9fb3376c6208ec4115d2ca43b965175a52d71349ecab8"
+checksum = "6ea51e75cfa9371c4d760270c3da13516d7206121d668c1fbdd6fd83d1782b0f"
 dependencies = [
  "derive_builder",
  "indexmap 2.13.0",
