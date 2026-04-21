@@ -664,8 +664,7 @@ fn run_local_compose(local_dir: &str, args: &[&str]) -> DeployResult<()> {
 /// running.
 fn print_dnsmasq_hint() {
     let running = cmd::run("brew", &["services", "list"])
-        .map(|out| out.contains("dnsmasq") && out.contains("started"))
-        .unwrap_or(false);
+        .is_ok_and(|out| out.contains("dnsmasq") && out.contains("started"));
 
     if running {
         return;

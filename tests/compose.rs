@@ -247,7 +247,7 @@ fn port_mapping_round_trip() {
             assert!(v.contains(&"4222:4222".to_string()));
             assert!(v.contains(&"8222:8222".to_string()));
         }
-        _ => panic!("expected short ports format"),
+        docker_compose_types::Ports::Long(_) => panic!("expected short ports format"),
     }
 }
 
@@ -274,7 +274,9 @@ fn caddy_only_depends_on_proxied_apps() {
             assert!(!deps.contains_key("nats"));
             assert!(!deps.contains_key("agent"));
         }
-        _ => panic!("expected conditional depends_on"),
+        docker_compose_types::DependsOnOptions::Simple(_) => {
+            panic!("expected conditional depends_on")
+        }
     }
 }
 
@@ -303,7 +305,9 @@ fn caddy_depends_on_all_routed_apps_only() {
             assert!(deps.contains_key("web"));
             assert!(!deps.contains_key("worker"));
         }
-        _ => panic!("expected conditional depends_on"),
+        docker_compose_types::DependsOnOptions::Simple(_) => {
+            panic!("expected conditional depends_on")
+        }
     }
 }
 
